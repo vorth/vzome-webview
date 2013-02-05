@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!-- saved from url=(0081)http://webglsamples.googlecode.com/hg/google-io/2011/10000-objects-optimized.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<title>vZome model via WebGL</title>
+<link rel="stylesheet" type="text/css" href="/webgl/my3dNexus7.css">
+<script type="text/javascript" src="/webgl/tdl/base.js"></script>
+<script type="text/javascript" src="/webgl/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="/webgl/vZome-WebGL-tdl.js" ></script>
+
+<script type="text/javascript" src="https://www.dropbox.com/static/api/1/dropbox.js" id="dropboxjs" data-app-key="3wmjgusgudrzlpf"></script>
+
+</head>
+<body>
+
+<div id="viewContainer">
+    <canvas id="modelView" width="900" height="1280" />
+</div>
+
+<div id="prevnexts">
+    <button class="navButs inactive" id="prev">Prev</button>
+    <button class="navButs" id="next">Next</button>
+</div>
+
+<div id="my3d" />
+
+<div>
+    <ul id="models">
+        <li cameraDistance="60"  >orangePurpleChiral</li>
+        <li cameraDistance="200" >greenBlue-pyritoDodec</li>
+        <li cameraDistance="240" >T-carbon</li>
+        <li cameraDistance="450" >cubicSurfaceLines-purpleYellow</li>
+        <li cameraDistance="350" >redSquash120cell</li>
+        <li cameraDistance="580" >vertexFirst120cell</li>
+    </ul>
+</div>
+
+<div id="fpsContainer">
+  <div class="fps">fps: <span id="fps">29</span></div>
+</div>
+<form>
+	<input type="dropbox-chooser" name="json-file" id="file-chooser" data-link-type="direct" style="visibility: hidden;" />
+</form>
+
+</body>
+</html>
