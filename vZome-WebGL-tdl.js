@@ -605,7 +605,7 @@ function initialize()
 			if ( distStr ) {
 				dist = parseInt( distStr );
 			}
-            app .startLoading( modelName + ".json", dist );
+            app .startLoading( modelName, dist );
             removeClass( nextButton, "inactive" );
             if ( currentModel === 0 ) {
                 addClass( prevButton, "inactive" );
@@ -643,12 +643,12 @@ function initialize()
     
     app = CreateApp( canvas, gl, my3d );
     
-    var modelName = document .location .hash .substring(1);
+    var modelPath = document .location .hash .substring(1);
 	var dist, distStr;
-    if ( !modelName )
+    if ( !modelPath )
     {
         modelList = document .getElementById( "models" ) .getElementsByTagName( 'li' );
-        modelName = modelList[ 0 ] .firstChild .nodeValue;
+        modelPath = modelList[ 0 ] .firstChild .nodeValue;
 		distStr = modelList[ 0 ] .getAttribute( "cameraDistance" );
 		if ( distStr ) {
 			dist = parseInt( distStr );
@@ -662,7 +662,7 @@ function initialize()
         fileChooser .addEventListener( 'DbxChooserSuccess', handleDropBox, false );
     }
 
-    app .startLoading( modelName + ".json", dist );
+    app .startLoading( modelPath, dist );
     render();
     return true;
 }
