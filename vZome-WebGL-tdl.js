@@ -39,8 +39,6 @@ function CreateApp( canvas, gl, my3d )
 	var lastPitch = 0;
 	var lastYaw = 0;
 
-    var fragmentShaderSrc;
-    var vertexShaderSrc;
     var program;
     var scene;
 
@@ -196,13 +194,8 @@ function CreateApp( canvas, gl, my3d )
         var attribBuffer;
         var expanded;
 
-        if ( vertexShaderSrc === null || fragmentShaderSrc === null || scene === null ) {
+        if ( scene === null ) {
             return;
-        }
-
-        if ( !program ) {
-            vertexShaderSrc = vertexShaderSrc .replace( "NUM_ORIENTATIONS", '' + scene .orientations .length / 16 )
-            program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
         }
 	
 		if ( ! scene .background )
@@ -443,40 +436,76 @@ function CreateApp( canvas, gl, my3d )
         m4.transpose(worldInverseTranspose, worldInverse);
     }
     
-    function getShaders()
-    {
-        var fsrequest = new XMLHttpRequest();
-        fsrequest .open( "GET", "/webgl/vZome-fragment-shader.glsl" );
-        fsrequest .onreadystatechange = function () {
-            if ( fsrequest .readyState === 4 ) {
-                handleFragmentShader( fsrequest .responseText );
-            }
-        }
-        fsrequest .send();
-
-        var vsrequest = new XMLHttpRequest();
-        vsrequest.open( "GET", "/webgl/vZome-vertex-shader.glsl" );
-        vsrequest.onreadystatechange = function () {
-            if ( vsrequest.readyState === 4 ) {
-                handleVertexShader( vsrequest.responseText );
-            }
-        }
-        vsrequest.send();
-    }
-
-    function handleFragmentShader( src )
-    {
-        fragmentShaderSrc = src;
-        finishLoading();
-    }
-
-    function handleVertexShader( src )
-    {
-        vertexShaderSrc = src;
-        finishLoading();
-    }
 
     /* Initialization code. */
+
+	var fragmentShaderSrc = [
+
+		"#ifdef GL_ES",
+		"precision highp float;",
+		"#endif",
+
+		"varying vec3 v_normal;",
+		"varying vec3 v_surfaceToLight;",
+		"varying vec3 v_surfaceToView;",
+		"varying vec4 v_colorMult;",
+
+		"uniform vec4 specular;",
+		"uniform float shininess;",
+		"uniform float specularFactor;",
+
+		"vec4 lit( float l ,float h, float m )",
+		"{",
+		"    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
+		"}",
+
+		"void main()",
+		"{",
+		"    vec3 normal = normalize( v_normal );",
+		"    vec3 surfaceToLight = normalize( v_surfaceToLight );",
+		"    vec3 surfaceToView = normalize( v_surfaceToView );",
+		"    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
+		"    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
+		"    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_colorMult * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
+		"}"
+		
+	] .join("\n");
+	
+	var vertexShaderSrc = [
+
+		"uniform mat4 viewInverse;",
+		"uniform vec3 lightWorldPos;",
+		"uniform mat4 worldViewProjection;",
+		"uniform mat4 worldInverseTranspose;",
+		"uniform mat4 orientations[120];",
+
+		"attribute vec4 position;",
+		"attribute vec3 normal;",
+		"attribute vec3 worldPosition;",
+		"attribute vec4 colorMult;",
+		"attribute vec2 orientation;",
+
+		"varying vec4 v_position;",
+		"varying vec3 v_normal;",
+		"varying vec3 v_surfaceToLight;",
+		"varying vec3 v_surfaceToView;",
+		"varying vec4 v_colorMult;",
+
+		"void main()",
+		"{",
+		"    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
+		"    vec4 wp = oriented + vec4(worldPosition, 0);",
+		"    v_position = (worldViewProjection * wp);",
+		"    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
+		"    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
+		"    v_colorMult = colorMult;",
+		"    v_surfaceToLight = lightWorldPos - wp.xyz;",
+		"    v_surfaceToView = (viewInverse[3] - wp).xyz;",
+		"    gl_Position = v_position;",
+		"}"
+		
+	] .join("\n");
+	program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
 
     mat4 .identity( mouseRotationMatrix );
     canvas .onmousedown = handleMouseDown;
@@ -489,7 +518,6 @@ function CreateApp( canvas, gl, my3d )
 		window .addEventListener( 'deviceorientation', handleOrientationEvent, false );
     }
     window .onmousewheel = document .onmousewheel = wheel;
-    getShaders();
 
     return {
         modelReady   : modelIsReady,
