@@ -181,7 +181,7 @@ function CreateApp( canvas, gl, my3d )
         // mat4.multiply( newRotationMatrix, mouseRotationMatrix, mouseRotationMatrix );
     }
 
-    function finishLoading()
+    function parseAndLoadScene( json )
     {
         var newInstances = [],
             models = [],
@@ -194,9 +194,7 @@ function CreateApp( canvas, gl, my3d )
         var attribBuffer;
         var expanded;
 
-        if ( scene === null ) {
-            return;
-        }
+		scene = JSON.parse( json );
 	
 		if ( ! scene .background )
 		{
@@ -204,14 +202,15 @@ function CreateApp( canvas, gl, my3d )
 		}
 		
         scene .uniforms = {
+			// fragment shader
+			specular: one4,
+			shininess: 50,
+			specularFactor: 0.2,
+			
+			// vertex shader
             viewInverse: viewInverse,
             lightWorldPos: lightWorldPos,
-            specular: one4,
-            shininess: 50,
-            specularFactor: 0.2,
-            world: world,
             worldViewProjection: worldViewProjection,
-            worldInverse: worldInverse,
             worldInverseTranspose: worldInverseTranspose,
             orientations : scene .orientations
         };
@@ -319,13 +318,6 @@ function CreateApp( canvas, gl, my3d )
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
         }
-    }
-
-    function parseAndLoadScene( json )
-    {
-	   scene = JSON.parse( json );
-
-       finishLoading();
     }
 
     function startLoading( modelUrl, cameraDistance )
