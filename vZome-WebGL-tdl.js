@@ -477,7 +477,6 @@ function CreateApp( canvas, gl, my3d )
 		"attribute vec4 colorMult;",
 		"attribute vec2 orientation;",
 
-		"varying vec4 v_position;",
 		"varying vec3 v_normal;",
 		"varying vec3 v_surfaceToLight;",
 		"varying vec3 v_surfaceToView;",
@@ -487,13 +486,12 @@ function CreateApp( canvas, gl, my3d )
 		"{",
 		"    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
 		"    vec4 wp = oriented + vec4(worldPosition, 0);",
-		"    v_position = (worldViewProjection * wp);",
+		"    gl_Position = (worldViewProjection * wp);",
 		"    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
 		"    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
 		"    v_colorMult = colorMult;",
 		"    v_surfaceToLight = lightWorldPos - wp.xyz;",
 		"    v_surfaceToView = (viewInverse[3] - wp).xyz;",
-		"    gl_Position = v_position;",
 		"}"
 		
 	] .join("\n");
