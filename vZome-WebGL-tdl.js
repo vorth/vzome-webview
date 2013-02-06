@@ -313,10 +313,6 @@ function CreateApp( canvas, gl, my3d )
                 model .drawPrep();
                 model .draw();
             }
-            // Set the alpha to 255.
-            gl.colorMask(false, false, false, true);
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
         }
     }
 
@@ -343,10 +339,13 @@ function CreateApp( canvas, gl, my3d )
     {
         renderBegin( -1 );
         scene .render();
+        renderEnd();
+
         if ( stereoView )
         {
             renderBegin( 1 );
             scene .render();
+            renderEnd();
         }
     }
 
@@ -395,7 +394,7 @@ function CreateApp( canvas, gl, my3d )
         gl.depthMask(true);
         gl.clearColor( scene .background[0], scene .background[1], scene .background[2], 0);
         gl.clearDepth(1);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+        gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT );
     
         gl.enable(gl.CULL_FACE);
         gl.enable(gl.DEPTH_TEST);
@@ -426,6 +425,14 @@ function CreateApp( canvas, gl, my3d )
         m4.mul( worldViewProjection, worldRotation, viewProjection );
         m4.inverse(worldInverse, worldRotation);
         m4.transpose(worldInverseTranspose, worldInverse);
+    }
+    
+    var renderEnd = function()
+    {
+		// Set the alpha to 255.
+		gl.colorMask(false, false, false, true);
+		gl.clearColor(0, 0, 0, 1);
+		gl.clear(gl.COLOR_BUFFER_BIT);
     }
     
 
