@@ -556,12 +556,12 @@ function initialize()
 		var dist, distStr;
         if ( currentModel < modelList .length - 1 ) {
             currentModel = currentModel + 1;
-            modelName = modelList[ currentModel ] .firstChild .nodeValue;
+            modelPath = modelList[ currentModel ] .firstChild .nodeValue;
 			distStr = modelList[ currentModel ] .getAttribute( "cameraDistance" );
 			if ( distStr ) {
 				dist = parseInt( distStr );
 			}
-            app .startLoading( modelName + ".json", dist );
+            app .startLoading( modelPath, dist );
             removeClass( prevButton, "inactive" );
             if ( currentModel === modelList .length - 1 ) {
                 addClass( nextButton, "inactive" );
@@ -572,12 +572,12 @@ function initialize()
     var prevModel = function() {
         if ( currentModel > 0 ) {
             currentModel = currentModel - 1;
-            modelName = modelList[ currentModel ] .firstChild .nodeValue;
+            modelPath = modelList[ currentModel ] .firstChild .nodeValue;
 			distStr = modelList[ currentModel ] .getAttribute( "cameraDistance" );
 			if ( distStr ) {
 				dist = parseInt( distStr );
 			}
-            app .startLoading( modelName + ".json", dist );
+            app .startLoading( modelPath, dist );
             removeClass( nextButton, "inactive" );
             if ( currentModel === 0 ) {
                 addClass( prevButton, "inactive" );
@@ -634,7 +634,7 @@ function initialize()
         fileChooser .addEventListener( 'DbxChooserSuccess', handleDropBox, false );
     }
 
-    app .startLoading( modelName + ".json", dist );
+    app .startLoading( modelName, dist );
     render();
     return true;
 }
