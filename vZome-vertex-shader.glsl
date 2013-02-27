@@ -1,9 +1,9 @@
 
-uniform mat4 viewInverse;
-uniform vec3 lightWorldPos;
 uniform mat4 worldViewProjection;
+uniform vec3 lightWorldPos;
+uniform mat4 viewInverse;
 uniform mat4 worldInverseTranspose;
-uniform mat4 orientations[120];
+uniform mat4 orientations[NUM_ORIENTATIONS];
 
 attribute vec4 position;
 attribute vec3 normal;

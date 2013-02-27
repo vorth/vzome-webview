@@ -39,10 +39,10 @@ function CreateApp( canvas, gl, my3d )
 	var lastPitch = 0;
 	var lastYaw = 0;
 
-    var fragmentShaderSrc;
-    var vertexShaderSrc;
+    var fragmentShaderSrc = null;
+    var vertexShaderSrc = null;
     var program;
-    var scene;
+    var scene = null;
 
     var mouseRotationMatrix = mat4 .create();
 
@@ -446,7 +446,7 @@ function CreateApp( canvas, gl, my3d )
     function getShaders()
     {
         var fsrequest = new XMLHttpRequest();
-        fsrequest .open( "GET", "/webgl/vZome-fragment-shader.glsl" );
+        fsrequest .open( "GET", "vZome-fragment-shader.glsl" );
         fsrequest .onreadystatechange = function () {
             if ( fsrequest .readyState === 4 ) {
                 handleFragmentShader( fsrequest .responseText );
@@ -455,7 +455,7 @@ function CreateApp( canvas, gl, my3d )
         fsrequest .send();
 
         var vsrequest = new XMLHttpRequest();
-        vsrequest.open( "GET", "/webgl/vZome-vertex-shader.glsl" );
+        vsrequest.open( "GET", "vZome-vertex-shader.glsl" );
         vsrequest.onreadystatechange = function () {
             if ( vsrequest.readyState === 4 ) {
                 handleVertexShader( vsrequest.responseText );
