@@ -29,6 +29,7 @@ a {
   padding: 10px;
 }
 #fpsContainer {
+    display: none;
   position: absolute;
   top: 1000px;
   left: 10px;
@@ -58,6 +59,12 @@ a {
   background-color: rgba(0,0,0,0.5);
   border-radius: 10px;
   padding: 10px;
+}
+.dropbox-chooser {
+  position: absolute;
+  top: 90%;
+  left: 50%;
+  z-index: 2;
 }
 #next {
   position: absolute;
