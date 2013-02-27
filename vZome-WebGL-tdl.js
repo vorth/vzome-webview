@@ -201,6 +201,9 @@ function CreateApp( canvas, gl, my3d )
             scene .background = [ 0.6, 0.6, 0.6 ];
 		}
 		
+		vertexShaderSrc = vertexShaderSrc .replace( "NUM_ORIENTATIONS", '' + scene .orientations .length / 16 )
+		program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
+
         scene .uniforms = {
 			// fragment shader
 			specular: one4,
@@ -476,7 +479,7 @@ function CreateApp( canvas, gl, my3d )
 		"uniform vec3 lightWorldPos;",
 		"uniform mat4 worldViewProjection;",
 		"uniform mat4 worldInverseTranspose;",
-		"uniform mat4 orientations[120];",
+		"uniform mat4 orientations[NUM_ORIENTATIONS];",
 
 		"attribute vec4 position;",
 		"attribute vec3 normal;",
@@ -502,7 +505,6 @@ function CreateApp( canvas, gl, my3d )
 		"}"
 		
 	] .join("\n");
-	program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
 
     mat4 .identity( mouseRotationMatrix );
     canvas .onmousedown = handleMouseDown;
