@@ -14,7 +14,7 @@ function CreateApp( canvas, gl, my3d )
 {
     var g_eyeRadius         = 300;
     
-    var stereoView = true;
+    var stereoView = my3d;
     
     // pre-allocate a bunch of arrays
     var projection = new Float32Array(16);
@@ -644,8 +644,16 @@ function initialize()
     
     var modelPath = document .location .hash .substring(1);
 	var dist, distStr;
-    if ( !modelPath )
+	dist = 240;
+	nextButton = document .getElementById( 'next' );
+	prevButton = document .getElementById( 'prev' );
+    if ( modelPath )
     {
+		addClass( nextButton, "inactive" );
+		addClass( prevButton, "inactive" );
+	}
+	else
+	{
         modelList = document .getElementById( "models" ) .getElementsByTagName( 'li' );
         modelPath = modelList[ 0 ] .firstChild .nodeValue;
 		distStr = modelList[ 0 ] .getAttribute( "cameraDistance" );
@@ -653,12 +661,13 @@ function initialize()
 			dist = parseInt( distStr );
 		}
 
-        nextButton = document .getElementById( 'next' );
         nextButton .addEventListener( 'click', nextModel, false );
-        prevButton = document .getElementById( 'prev' );
         prevButton .addEventListener( 'click', prevModel, false );
-        fileChooser = document .getElementById( 'file-chooser' );
-        fileChooser .addEventListener( 'DbxChooserSuccess', handleDropBox, false );
+		fileChooser = document .getElementById( 'file-chooser' );
+		if ( fileChooser )
+		{
+			fileChooser .addEventListener( 'DbxChooserSuccess', handleDropBox, false );
+		}
     }
 
     app .startLoading( modelPath, dist );
