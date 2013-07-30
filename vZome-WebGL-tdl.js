@@ -323,6 +323,11 @@ function CreateApp( canvas, gl, my3d )
     {
 		g_eyeRadius = cameraDistance;
         scene = null; // this disables rendering while loading a different model
+
+		if ( modelUrl .indexOf( "http" ) === 0 )
+		{
+			modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
+		}
         var request = new XMLHttpRequest();
         request.open( "GET", modelUrl );
         request.onreadystatechange = function () {
@@ -611,11 +616,20 @@ function initialize()
             }
         }
     }
+
+	var openFile = function() {
+		filepicker.pick({
+			extension: '.vZome'
+		  },
+		  function( FPFile ){
+			console .log( JSON.stringify( FPFile ) );
+			app .startLoading( FPFile.url, 300 );
+		  }
+		);
+	}
  
     var handleDropBox = function( e ) {
-		var start = "https://dl.dropbox.com/" .length;
-		var url = "http://vzome.com/dropbox/forward.py?tail=" + e.files[0].link .substring( start );
-		app .startLoading( url, 300 );
+		app .startLoading( e.files[0].link, 300 );
     }
  
     var handleFiles = function() {
@@ -647,10 +661,14 @@ function initialize()
 	dist = 240;
 	nextButton = document .getElementById( 'next' );
 	prevButton = document .getElementById( 'prev' );
+	openButton = document .getElementById( 'open' );
     if ( modelPath )
     {
-		addClass( nextButton, "inactive" );
-		addClass( prevButton, "inactive" );
+		if ( nextButton ) addClass( nextButton, "inactive" );
+		if ( prevButton ) addClass( prevButton, "inactive" );
+
+		if ( modelPath .indexOf( '.json', modelPath.length - 5 ) == -1 )
+			modelPath = modelPath + '.json';
 	}
 	else
 	{
@@ -661,8 +679,11 @@ function initialize()
 			dist = parseInt( distStr );
 		}
 
+		filepicker.setKey( 'ACWyTwSaKo1IMsum2ajglz' );
         nextButton .addEventListener( 'click', nextModel, false );
         prevButton .addEventListener( 'click', prevModel, false );
+        openButton .addEventListener( 'click', openFile, false );
+
 		fileChooser = document .getElementById( 'file-chooser' );
 		if ( fileChooser )
 		{

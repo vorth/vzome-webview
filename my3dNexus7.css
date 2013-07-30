@@ -66,6 +66,17 @@ a {
   left: 50%;
   z-index: 2;
 }
+#open {
+  position: absolute;
+  top: 90%;
+  left: 50%;
+  z-index: 2;
+  color: white;
+  font-size: 400%;
+  background-color: rgba(0,0,0,0.5);
+  border-radius: 10px;
+  padding: 10px;
+}
 #next {
   position: absolute;
   right: 10px;
