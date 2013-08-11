@@ -1,3 +1,4 @@
+
 tdl .require( 'tdl.buffers' );
 tdl .require( 'tdl.fast' );
 tdl .require( 'tdl.fps' );
@@ -8,29 +9,222 @@ tdl .require( 'tdl.primitives' );
 tdl .require( 'tdl.programs' );
 tdl .require( 'tdl.webgl' );
 
-var canvas;   // the canvas, required as a global by tdl
+var canvas;   // required as a global by tdl
+var scene;
+
+function parseAndLoadScene( json )
+{
+	var newInstances = [],
+		models = [],
+		arrayInstances = [];
+	var ii, jj;
+	var newShapes = [];
+	var model;
+	var uniform;
+	var index;
+	var attribBuffer;
+	var expanded;
+	var vertexShaderSrc;
+	var fragmentShaderSrc;
+
+	scene = JSON.parse( json );
+
+	if ( ! scene .background )
+	{
+		scene .background = [ 0.6, 0.6, 0.6 ];
+	}
+
+	vertexShaderSrc = [
+
+		"uniform mat4 viewInverse;",
+		"uniform vec3 lightWorldPos;",
+		"uniform mat4 worldViewProjection;",
+		"uniform mat4 worldInverseTranspose;",
+		"uniform mat4 orientations[" + scene .orientations .length / 16 + "];",
+
+		"attribute vec4 position;",
+		"attribute vec3 normal;",
+		"attribute vec3 worldPosition;",
+		"attribute vec4 colorMult;",
+		"attribute vec2 orientation;",
+
+		"varying vec3 v_normal;",
+		"varying vec3 v_surfaceToLight;",
+		"varying vec3 v_surfaceToView;",
+		"varying vec4 v_colorMult;",
+
+		"void main()",
+		"{",
+		"    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
+		"    vec4 wp = oriented + vec4(worldPosition, 0);",
+		"    gl_Position = (worldViewProjection * wp);",
+		"    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
+		"    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
+		"    v_colorMult = colorMult;",
+		"    v_surfaceToLight = lightWorldPos - wp.xyz;",
+		"    v_surfaceToView = (viewInverse[3] - wp).xyz;",
+		"}"
+	
+	] .join("\n");
+	
+	fragmentShaderSrc = [
+
+		"#ifdef GL_ES",
+		"precision highp float;",
+		"#endif",
+
+		"varying vec3 v_normal;",
+		"varying vec3 v_surfaceToLight;",
+		"varying vec3 v_surfaceToView;",
+		"varying vec4 v_colorMult;",
+
+		"uniform vec4 specular;",
+		"uniform float shininess;",
+		"uniform float specularFactor;",
+
+		"vec4 lit( float l ,float h, float m )",
+		"{",
+		"    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
+		"}",
+
+		"void main()",
+		"{",
+		"    vec3 normal = normalize( v_normal );",
+		"    vec3 surfaceToLight = normalize( v_surfaceToLight );",
+		"    vec3 surfaceToView = normalize( v_surfaceToView );",
+		"    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
+		"    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
+		"    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_colorMult * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
+		"}"
+	
+	] .join("\n");
+
+	scene .program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
+
+	for ( ii = 0; ii < scene .instances .length; ++ii )
+	{
+		newInstances .push({
+		  x: scene .instances[ ii ] .location[ 0 ],
+		  y: scene .instances[ ii ] .location[ 1 ],
+		  z: scene .instances[ ii ] .location[ 2 ],
+		  colorMult: new Float32Array( scene .instances[ ii ] .color ),
+		  arrayIndex: scene .instances[ ii ] .shape,
+		  orientation: scene .instances[ ii ] .orientation
+		});
+	}
+
+	for ( jj = 0; jj < scene.shapes.length; ++jj ) {
+		var shape = scene.shapes[ jj ];
+		var positions = new tdl.primitives.AttribBuffer(3, shape.position.length);
+		for ( ii = 0; ii < shape.position.length; ++ii) {
+			positions.push(shape.position[ ii ]);
+		}
+		var normals = new tdl.primitives.AttribBuffer(3, shape.normal.length);
+		for ( ii = 0; ii < shape.normal.length; ++ii) {
+			normals.push(shape.normal[ ii ]);
+		}
+		var indices = new tdl.primitives.AttribBuffer(3, shape.indices.length, 'Uint16Array');
+		for ( ii = 0; ii < shape.indices.length; ++ii) {
+			indices.push(shape.indices[ ii ]);
+		}
+		newShapes.push({
+			position:positions,
+			normal:normals,
+			indices:indices,
+			// Add extra fields to each geometry
+			worldPosition:new tdl.primitives.AttribBuffer(3, shape.position.length),
+			colorMult:new tdl.primitives.AttribBuffer(4, shape.position.length),
+			orientation:new tdl.primitives.AttribBuffer(2, shape.position.length)
+		});
+	}
+
+	// Expand scene.shapes from newInstances to geometry.
+
+	// Step 2: convert newInstances to expanded geometry
+	for ( ii = 0; ii < newInstances.length; ++ii) {
+		arrayInstances.push(newShapes[ newInstances[ii].arrayIndex ]);
+	}
+	expanded = tdl.primitives.concatLarge(arrayInstances);
+
+	// Step 3: Make models from our expanded geometry.
+	for ( ii = 0; ii < expanded.arrays.length; ++ii) {
+		model = new tdl.models.Model( scene .program, expanded.arrays[ii], null );
+		models.push(model);
+	}
+
+	// Step 4: Copy in Colors
+	for ( ii = 0; ii < newInstances.length; ++ii) {
+		index = expanded .instances[ii] .arrayIndex;
+		newInstances[ii] .firstVertex = expanded .instances[ii] .firstVertex;
+		newInstances[ii] .numVertices = expanded .instances[ii] .numVertices;
+		newInstances[ii] .expandedArrayIndex = index;
+		attribBuffer = expanded .arrays[index] .colorMult;
+		attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices, newInstances[ii] .colorMult );
+	}
+	for ( ii = 0; ii < models.length; ++ii) {
+		attribBuffer = expanded.arrays[ii].colorMult;
+		models[ii].setBuffer('colorMult', attribBuffer);
+	}
+
+	// copy in worldPosition
+	for ( ii = 0; ii < newInstances.length; ++ii) {
+		index = newInstances[ii] .expandedArrayIndex;
+		attribBuffer = expanded.arrays[index].worldPosition;
+		attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices,
+								[ newInstances[ii].x, newInstances[ii].y, newInstances[ii].z ] );
+	}
+	for ( ii = 0; ii < models.length; ++ii) {
+		attribBuffer = expanded.arrays[ii].worldPosition;
+		models[ii].setBuffer('worldPosition', attribBuffer);
+	}
+
+	// copy in orientation
+	for ( ii = 0; ii < newInstances.length; ++ii) {
+		var instance = newInstances[ii];
+		var index = instance.expandedArrayIndex;
+		attribBuffer = expanded.arrays[index].orientation;
+		attribBuffer.fillRange(instance.firstVertex, instance.numVertices, [instance.orientation, 0]);
+	}
+	for ( ii = 0; ii < models.length; ++ii) {
+		attribBuffer = expanded.arrays[ii].orientation;
+		models[ii].setBuffer('orientation', attribBuffer);
+	}
+
+	scene .render = function () {
+	    this .program .setUniform( 'orientations', scene .orientations );
+		for ( ii = 0; ii < models.length; ++ii) {
+			model = models[ii];
+			model .drawPrep();
+			model .draw();
+		}
+	}
+}
+
+function startLoading( modelUrl, cameraDistance )
+{
+	g_eyeRadius = cameraDistance;
+	scene = null; // this disables rendering while loading a different model
+
+	if ( modelUrl .indexOf( "http" ) === 0 )
+	{
+		modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
+	}
+	var request = new XMLHttpRequest();
+	request.open( "GET", modelUrl );
+	request.onreadystatechange = function () {
+		if ( request.readyState === 4 ) {
+		   parseAndLoadScene( request.responseText );
+		}
+	}
+	request.send();
+}
 
 function CreateApp( canvas, gl, my3d )
 {
-    var g_eyeRadius         = 300;
+    var g_eyeRadius;
+    g_eyeRadius = 300;
     
     var stereoView = my3d;
-    
-    // pre-allocate a bunch of arrays
-    var projection = new Float32Array(16);
-    var view = new Float32Array(16);
-    var worldRotation = new Float32Array(16);
-    var world = new Float32Array(16);
-    var worldInverse = new Float32Array(16);
-    var worldInverseTranspose = new Float32Array(16);
-    var viewProjection = new Float32Array(16);
-    var worldViewProjection = new Float32Array(16);
-    var viewInverse = new Float32Array(16);
-    var viewProjectionInverse = new Float32Array(16);
-    var target = new Float32Array(3);
-    var up = new Float32Array([0,1,0]);
-    var lightWorldPos = new Float32Array(3);
-    var one4 = new Float32Array([1,1,1,1]);
 
     var mouseDown = false;
     var lastMouseX = null;
@@ -38,9 +232,12 @@ function CreateApp( canvas, gl, my3d )
 	var lastRoll = 0;
 	var lastPitch = 0;
 	var lastYaw = 0;
-
-    var program;
-    var scene;
+    
+    var material = {
+			specular       : new Float32Array([1,1,1,1]),
+			shininess      : 50,
+			specularFactor : 0.2
+    	};
 
     var mouseRotationMatrix = mat4 .create();
 
@@ -55,7 +252,7 @@ function CreateApp( canvas, gl, my3d )
         }
     }
     
-    function wheel( event )
+    function handleScroll( event )
     {
         var delta = 0;
         if ( !event ) {
@@ -181,163 +378,6 @@ function CreateApp( canvas, gl, my3d )
         // mat4.multiply( newRotationMatrix, mouseRotationMatrix, mouseRotationMatrix );
     }
 
-    function parseAndLoadScene( json )
-    {
-        var newInstances = [],
-            models = [],
-            arrayInstances = [];
-        var ii, jj;
-        var newShapes = [];
-        var model;
-        var uniform;
-        var index;
-        var attribBuffer;
-        var expanded;
-
-		scene = JSON.parse( json );
-	
-		if ( ! scene .background )
-		{
-            scene .background = [ 0.6, 0.6, 0.6 ];
-		}
-		
-		vertexShaderSrc = vertexShaderSrc .replace( "NUM_ORIENTATIONS", '' + scene .orientations .length / 16 )
-		program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
-
-        scene .uniforms = {
-			// fragment shader
-			specular: one4,
-			shininess: 50,
-			specularFactor: 0.2,
-			
-			// vertex shader
-            viewInverse: viewInverse,
-            lightWorldPos: lightWorldPos,
-            worldViewProjection: worldViewProjection,
-            worldInverseTranspose: worldInverseTranspose,
-            orientations : scene .orientations
-        };
-
-        for ( ii = 0; ii < scene .instances .length; ++ii )
-        {
-            newInstances .push({
-              x: scene .instances[ ii ] .location[ 0 ],
-              y: scene .instances[ ii ] .location[ 1 ],
-              z: scene .instances[ ii ] .location[ 2 ],
-              colorMult: new Float32Array( scene .instances[ ii ] .color ),
-              arrayIndex: scene .instances[ ii ] .shape,
-              orientation: scene .instances[ ii ] .orientation
-            });
-        }
-
-        for ( jj = 0; jj < scene.shapes.length; ++jj ) {
-            var shape = scene.shapes[ jj ];
-            var positions = new tdl.primitives.AttribBuffer(3, shape.position.length);
-            for ( ii = 0; ii < shape.position.length; ++ii) {
-                positions.push(shape.position[ ii ]);
-            }
-            var normals = new tdl.primitives.AttribBuffer(3, shape.normal.length);
-            for ( ii = 0; ii < shape.normal.length; ++ii) {
-                normals.push(shape.normal[ ii ]);
-            }
-            var indices = new tdl.primitives.AttribBuffer(3, shape.indices.length, 'Uint16Array');
-            for ( ii = 0; ii < shape.indices.length; ++ii) {
-                indices.push(shape.indices[ ii ]);
-            }
-            newShapes.push({
-                position:positions,
-                normal:normals,
-                indices:indices,
-                // Add extra fields to each geometry
-                worldPosition:new tdl.primitives.AttribBuffer(3, shape.position.length),
-                colorMult:new tdl.primitives.AttribBuffer(4, shape.position.length),
-                orientation:new tdl.primitives.AttribBuffer(2, shape.position.length)
-            });
-        }
-
-        // Expand scene.shapes from newInstances to geometry.
-
-        // Step 2: convert newInstances to expanded geometry
-        for ( ii = 0; ii < newInstances.length; ++ii) {
-            arrayInstances.push(newShapes[ newInstances[ii].arrayIndex ]);
-        }
-        expanded = tdl.primitives.concatLarge(arrayInstances);
-
-        // Step 3: Make models from our expanded geometry.
-        for ( ii = 0; ii < expanded.arrays.length; ++ii) {
-            model = new tdl.models.Model( program, expanded.arrays[ii], null );
-            models.push(model);
-        }
-
-        // Step 4: Copy in Colors
-        for ( ii = 0; ii < newInstances.length; ++ii) {
-            index = expanded .instances[ii] .arrayIndex;
-            newInstances[ii] .firstVertex = expanded .instances[ii] .firstVertex;
-            newInstances[ii] .numVertices = expanded .instances[ii] .numVertices;
-            newInstances[ii] .expandedArrayIndex = index;
-            attribBuffer = expanded .arrays[index] .colorMult;
-            attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices, newInstances[ii] .colorMult );
-        }
-        for ( ii = 0; ii < models.length; ++ii) {
-            attribBuffer = expanded.arrays[ii].colorMult;
-            models[ii].setBuffer('colorMult', attribBuffer);
-        }
-
-        // copy in worldPosition
-        for ( ii = 0; ii < newInstances.length; ++ii) {
-            index = newInstances[ii] .expandedArrayIndex;
-            attribBuffer = expanded.arrays[index].worldPosition;
-            attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices,
-                                    [ newInstances[ii].x, newInstances[ii].y, newInstances[ii].z ] );
-        }
-        for ( ii = 0; ii < models.length; ++ii) {
-            attribBuffer = expanded.arrays[ii].worldPosition;
-            models[ii].setBuffer('worldPosition', attribBuffer);
-        }
-
-        // copy in orientation
-        for ( ii = 0; ii < newInstances.length; ++ii) {
-            var instance = newInstances[ii];
-            var index = instance.expandedArrayIndex;
-            attribBuffer = expanded.arrays[index].orientation;
-            attribBuffer.fillRange(instance.firstVertex, instance.numVertices, [instance.orientation, 0]);
-        }
-        for ( ii = 0; ii < models.length; ++ii) {
-            attribBuffer = expanded.arrays[ii].orientation;
-            models[ii].setBuffer('orientation', attribBuffer);
-        }
-
-        scene.render = function () {
-            for ( uniform in scene .uniforms ) {
-                program .setUniform( uniform, scene .uniforms[ uniform ] );
-            }
-            for ( ii = 0; ii < models.length; ++ii) {
-                model = models[ii];
-                model .drawPrep();
-                model .draw();
-            }
-        }
-    }
-
-    function startLoading( modelUrl, cameraDistance )
-    {
-		g_eyeRadius = cameraDistance;
-        scene = null; // this disables rendering while loading a different model
-
-		if ( modelUrl .indexOf( "http" ) === 0 )
-		{
-			modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
-		}
-        var request = new XMLHttpRequest();
-        request.open( "GET", modelUrl );
-        request.onreadystatechange = function () {
-            if ( request.readyState === 4 ) {
-               parseAndLoadScene( request.responseText );
-            }
-        }
-        request.send();
-    }
-
     function modelIsReady()
     {
         return scene && scene .render;
@@ -345,19 +385,24 @@ function CreateApp( canvas, gl, my3d )
 
     function render()
     {
-        renderBegin( -1 );
+        if ( !( scene && scene .render ) )
+        {
+            return;
+        }
+
+        var uniforms = renderBegin( -1, scene .program );
         scene .render();
         renderEnd();
 
         if ( stereoView )
         {
-            renderBegin( 1 );
+            uniforms = renderBegin( 1, scene .program );
             scene .render();
             renderEnd();
         }
     }
 
-    function renderBegin( eye )
+    function renderBegin( eye, program )
     {
         var m4 = tdl .fast .matrix4;
     
@@ -369,7 +414,21 @@ function CreateApp( canvas, gl, my3d )
         var height = Math.floor( canvas.height * 0.9 );
         var bottom = Math.floor( canvas.height * 0.05 );
         var aspectRatio = canvas.clientWidth / canvas.clientHeight;
-        var eyePosition = new Float32Array(3);
+		var viewInverse = new Float32Array(16);
+        var eyePosition;
+    
+		var projection = new Float32Array(16);
+		var view = new Float32Array(16);
+		var worldRotation = new Float32Array(16);
+		var world = new Float32Array(16);
+		var worldInverse = new Float32Array(16);
+		var worldInverseTranspose = new Float32Array(16);
+		var viewProjection = new Float32Array(16);
+		var worldViewProjection = new Float32Array(16);
+		var viewProjectionInverse = new Float32Array(16);
+		var target = new Float32Array(3);
+		var up = new Float32Array([0,1,0]);
+		var lightWorldPos = new Float32Array(3);
 
         var my3dTop = 40,
             my3dLeftLeft = 0,
@@ -433,124 +492,46 @@ function CreateApp( canvas, gl, my3d )
         m4.mul( worldViewProjection, worldRotation, viewProjection );
         m4.inverse(worldInverse, worldRotation);
         m4.transpose(worldInverseTranspose, worldInverse);
+
+	    program .setUniform( 'viewInverse', viewInverse );
+	    program .setUniform( 'lightWorldPos', lightWorldPos );
+	    program .setUniform( 'worldInverseTranspose', worldInverseTranspose );
+	    program .setUniform( 'worldViewProjection', worldViewProjection );
+
+	    program .setUniform( 'specular', material .specular );
+	    program .setUniform( 'shininess', material .shininess );
+	    program .setUniform( 'specularFactor', material .specularFactor );
     }
     
-    var renderEnd = function()
+    function renderEnd()
     {
 		// Set the alpha to 255.
 		gl.colorMask(false, false, false, true);
 		gl.clearColor(0, 0, 0, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
     }
-    
 
     /* Initialization code. */
 
-	var fragmentShaderSrc = [
-
-		"#ifdef GL_ES",
-		"precision highp float;",
-		"#endif",
-
-		"varying vec3 v_normal;",
-		"varying vec3 v_surfaceToLight;",
-		"varying vec3 v_surfaceToView;",
-		"varying vec4 v_colorMult;",
-
-		"uniform vec4 specular;",
-		"uniform float shininess;",
-		"uniform float specularFactor;",
-
-		"vec4 lit( float l ,float h, float m )",
-		"{",
-		"    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
-		"}",
-
-		"void main()",
-		"{",
-		"    vec3 normal = normalize( v_normal );",
-		"    vec3 surfaceToLight = normalize( v_surfaceToLight );",
-		"    vec3 surfaceToView = normalize( v_surfaceToView );",
-		"    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
-		"    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
-		"    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_colorMult * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
-		"}"
-		
-	] .join("\n");
-	
-	var vertexShaderSrc = [
-
-		"uniform mat4 viewInverse;",
-		"uniform vec3 lightWorldPos;",
-		"uniform mat4 worldViewProjection;",
-		"uniform mat4 worldInverseTranspose;",
-		"uniform mat4 orientations[NUM_ORIENTATIONS];",
-
-		"attribute vec4 position;",
-		"attribute vec3 normal;",
-		"attribute vec3 worldPosition;",
-		"attribute vec4 colorMult;",
-		"attribute vec2 orientation;",
-
-		"varying vec3 v_normal;",
-		"varying vec3 v_surfaceToLight;",
-		"varying vec3 v_surfaceToView;",
-		"varying vec4 v_colorMult;",
-
-		"void main()",
-		"{",
-		"    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
-		"    vec4 wp = oriented + vec4(worldPosition, 0);",
-		"    gl_Position = (worldViewProjection * wp);",
-		"    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
-		"    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
-		"    v_colorMult = colorMult;",
-		"    v_surfaceToLight = lightWorldPos - wp.xyz;",
-		"    v_surfaceToView = (viewInverse[3] - wp).xyz;",
-		"}"
-		
-	] .join("\n");
-
     mat4 .identity( mouseRotationMatrix );
-    canvas .onmousedown = handleMouseDown;
-	canvas .addEventListener( 'touchstart', handleTouchStart );
-	canvas .addEventListener( 'touchmove', handleTouchMove );
-    document .onmouseup = handleMouseUp;
-    document .onmousemove = handleMouseMove;
-    if ( window .addEventListener ) {
-        window .addEventListener( 'DOMMouseScroll', wheel, false );
-		window .addEventListener( 'deviceorientation', handleOrientationEvent, false );
-    }
-    window .onmousewheel = document .onmousewheel = wheel;
 
     return {
-        modelReady   : modelIsReady,
         startLoading : startLoading,
         parseAndLoadScene : parseAndLoadScene,
-        render       : render
+        render       : render,
+        handleScroll     : handleScroll,
+        handleMouseDown  : handleMouseDown,
+        handleMouseUp    : handleMouseUp,
+        handleMouseMove  : handleMouseMove,
+        handleTouchStart : handleTouchStart,
+        handleTouchMove  : handleTouchMove,
+        handleOrientationEvent : handleOrientationEvent,
     };
-}
-
-function hasClass(ele,cls) {
-    return ele.className.match(new RegExp('(\\s|^)'+cls+'(\\s|$)'));
-}
-
-function addClass(ele,cls) {
-    if (!this.hasClass(ele,cls)) {
-        ele.className += " "+cls;
-    }
-}
-
-function removeClass(ele,cls) {
-    if (hasClass(ele,cls)) {
-        var reg = new RegExp('(\\s|^)'+cls+'(\\s|$)');
-        ele.className=ele.className.replace(reg,' ');
-    }
 }
 
 function initialize()
 {
-    var app;
+	var app;
     var gl;                   // the gl context.
     var then = (new Date()).getTime() * 0.001;
     var fpsTimer = new tdl .fps .FPSTimer();
@@ -561,28 +542,22 @@ function initialize()
     var prevButton;
 	var fileChooser;
 
-    function render()
-    {
-        tdl .webgl .requestAnimationFrame( render, canvas );
-                
-        if ( ! app .modelReady() )
-        {
-            fpsElem.innerHTML = 'loading...';
-            return;
-        }
+	function hasClass(ele,cls) {
+		return ele.className.match(new RegExp('(\\s|^)'+cls+'(\\s|$)'));
+	}
 
-        // Compute the elapsed time since the last rendered frame
-        // in seconds.
-        var now = (new Date()).getTime() * 0.001;
-        var elapsedTime = now - then;
-        then = now;
-        
-        // Update the FPS timer.
-        fpsTimer.update(elapsedTime);
-        fpsElem .innerHTML = fpsTimer.averageFPS;
-        
-        app .render();
-    }
+	function addClass(ele,cls) {
+		if (!this.hasClass(ele,cls)) {
+			ele.className += " "+cls;
+		}
+	}
+
+	function removeClass(ele,cls) {
+		if (hasClass(ele,cls)) {
+			var reg = new RegExp('(\\s|^)'+cls+'(\\s|$)');
+			ele.className=ele.className.replace(reg,' ');
+		}
+	}
 
     var nextModel = function() {
 		var dist, distStr;
@@ -618,9 +593,7 @@ function initialize()
     }
 
 	var openFile = function() {
-		filepicker.pick({
-			extension: '.vZome'
-		  },
+		filepicker.pick( { extension: '.vZome' },
 		  function( FPFile ){
 			console .log( JSON.stringify( FPFile ) );
 			app .startLoading( FPFile.url, 300 );
@@ -632,14 +605,22 @@ function initialize()
 		app .startLoading( e.files[0].link, 300 );
     }
  
-    var handleFiles = function() {
-    	var file = this .files[ 0 ];
-    	var reader = new FileReader();
-    	reader .onload = function ( e ) {
-    		app .parseAndLoadScene( e .target .result );
-    	}
-		reader .readAsText( file );
-	}
+    function render()
+    {
+        tdl .webgl .requestAnimationFrame( render, canvas );
+        
+        // Compute the elapsed time since the last rendered frame
+        // in seconds.
+        var now = (new Date()).getTime() * 0.001;
+        var elapsedTime = now - then;
+        then = now;
+        
+        // Update the FPS timer.
+        fpsTimer.update(elapsedTime);
+        fpsElem .innerHTML = fpsTimer.averageFPS;
+        
+        app .render();
+    }
 
     canvas = document .getElementById( "modelView" );
     
@@ -650,12 +631,19 @@ function initialize()
         return false;
     }
     
-    if ( my3d ) {
-//        document .getElementById( "fps" ) .addClass( nextButton, "inactive" );
-    }
-    
     app = CreateApp( canvas, gl, my3d );
     
+	canvas .onmousedown = app .handleMouseDown;
+	canvas .addEventListener( 'touchstart', app .handleTouchStart );
+	canvas .addEventListener( 'touchmove', app .handleTouchMove );
+    document .onmouseup = app .handleMouseUp;
+    document .onmousemove = app .handleMouseMove;
+    if ( window .addEventListener ) {
+        window .addEventListener( 'DOMMouseScroll', app .handleScroll, false );
+		window .addEventListener( 'deviceorientation', app .handleOrientationEvent, false );
+    }
+    window .onmousewheel = document .onmousewheel = app .handleScroll;
+
     var modelPath = document .location .hash .substring(1);
 	var dist, distStr;
 	dist = 240;
