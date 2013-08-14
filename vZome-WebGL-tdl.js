@@ -11,6 +11,43 @@ tdl .require( 'tdl.webgl' );
 
 var canvas;   // required as a global by tdl
 var scene;
+var camera = (function () {
+
+	var distance = 300;
+    var viewRotationMatrix = mat4 .create();
+	
+	mat4 .identity( viewRotationMatrix );
+
+	return {
+
+		zoom : function( delta )
+		{
+			if ( distance >= delta )
+				distance = distance - delta;
+		},
+		
+		setDistance : function( cameraDistance )
+		{
+			distance = cameraDistance;
+		},
+
+		rotate : function( rotation )
+		{
+			mat4 .multiply( rotation, viewRotationMatrix, viewRotationMatrix );
+		},
+		
+		getPosition : function()
+		{
+			return [ 0, 0, -distance ];
+		},
+		
+		getRotation : function()
+		{
+			return viewRotationMatrix;
+		}
+	
+	};
+}());
 
 function parseAndLoadScene( json )
 {
@@ -202,7 +239,7 @@ function parseAndLoadScene( json )
 
 function startLoading( modelUrl, cameraDistance )
 {
-	g_eyeRadius = cameraDistance;
+	camera .setDistance( cameraDistance );
 	scene = null; // this disables rendering while loading a different model
 
 	if ( modelUrl .indexOf( "http" ) === 0 )
@@ -220,18 +257,8 @@ function startLoading( modelUrl, cameraDistance )
 }
 
 function CreateApp( canvas, gl, my3d )
-{
-    var g_eyeRadius;
-    g_eyeRadius = 300;
-    
+{    
     var stereoView = my3d;
-
-    var mouseDown = false;
-    var lastMouseX = null;
-    var lastMouseY = null;
-	var lastRoll = 0;
-	var lastPitch = 0;
-	var lastYaw = 0;
     
     var material = {
 			specular       : new Float32Array([1,1,1,1]),
@@ -239,170 +266,21 @@ function CreateApp( canvas, gl, my3d )
 			specularFactor : 0.2
     	};
 
-    var mouseRotationMatrix = mat4 .create();
-
-//     function handleKeyPress( event )
-//     {}
-//     window.addEventListener('keypress', handleKeyPress, false);
-
-    function zoom( delta )
-    {
-        if ( g_eyeRadius >= delta ) {
-            g_eyeRadius = g_eyeRadius - delta;
-        }
-    }
-    
-    function handleScroll( event )
-    {
-        var delta = 0;
-        if ( !event ) {
-            event = window.event;
-        }
-        if (event.wheelDelta) {
-            delta = event.wheelDelta/120; 
-        } else if (event.detail) {
-            delta = -event.detail/3;
-        }
-        if (delta) {
-            zoom( delta * 3 );
-        }
-        if (event.preventDefault) {
-            event.preventDefault();
-        }
-        event.returnValue = false;
-    }
-    
-    function handleMouseDown( event )
-    {
-        mouseDown = true;
-        lastMouseX = event.clientX;
-        lastMouseY = event.clientY;
-    }
-
-    function handleMouseUp( event )
-    {
-        mouseDown = false;
-    }
-
-    function handleMouseMove( event )
-    {
-        if (!mouseDown) {
-          return;
-        }
-        var newX = event.clientX;
-        var newY = event.clientY;
-        
-        var deltaX = newX - lastMouseX;
-        var newRotationMatrix = mat4.create();
-        mat4.identity(newRotationMatrix);
-        mat4.rotate(newRotationMatrix, tdl .math .degToRad(deltaX / 3), [0, 1, 0]);
-        
-        var deltaY = newY - lastMouseY;
-        mat4.rotate(newRotationMatrix, tdl .math .degToRad(deltaY / 3), [-1, 0, 0]);
-        
-        mat4.multiply( newRotationMatrix, mouseRotationMatrix, mouseRotationMatrix );
-        
-        lastMouseX = newX;
-        lastMouseY = newY;
-    }
-
-    function handleTouchStart( event )
-    {
-		if ( event && event .preventDefault )
-			event .preventDefault();
-		var touch = event .touches[0];
-        lastMouseX = touch.clientX;
-        lastMouseY = touch.clientY;
-    }
-
-    function handleTouchMove( event )
-    {
-		if ( event && event .preventDefault )
-			event .preventDefault();
-		var touch = event .touches[0];
-        var newX = touch.clientX;
-        var newY = touch.clientY;
-        
-        var deltaX = newX - lastMouseX;
-        var newRotationMatrix = mat4.create();
-        mat4.identity(newRotationMatrix);
-        mat4.rotate(newRotationMatrix, tdl .math .degToRad(deltaX / 3), [0, 1, 0]);
-        
-        var deltaY = newY - lastMouseY;
-        mat4.rotate(newRotationMatrix, tdl .math .degToRad(deltaY / 3), [-1, 0, 0]);
-        
-        mat4.multiply( newRotationMatrix, mouseRotationMatrix, mouseRotationMatrix );
-        
-        lastMouseX = newX;
-        lastMouseY = newY;
-    }
-
-    function animate()
-    {
-        var deltaX = 2;
-        var newRotationMatrix = mat4.create();
-        mat4.identity( newRotationMatrix );
-        mat4.rotate( newRotationMatrix, tdl .math .degToRad(deltaX / 3), [0, 1, 0] );
-        
-        var deltaY = 2;
-        mat4.rotate( newRotationMatrix, tdl .math .degToRad(deltaY / 3), [-1, 0, 0] );
-        
-        mat4.multiply( newRotationMatrix, mouseRotationMatrix, mouseRotationMatrix );
-    }
-
-    function handleOrientationChange( event )
-    {
-		if ( event && event .preventDefault )
-			event .preventDefault();
-    }
-
-    function handleOrientationEvent( e )
-    {
-
-        // Get the orientation of the device in 3 axes, known as alpha, beta, and gamma, 
-        // represented in degrees from the initial orientation of the device on load
- 
-        var yaw = e.alpha,
-            pitch = e.beta,
-            roll = e.gamma;
- 
-        var newRotationMatrix = mat4.create();
-        mat4.identity( newRotationMatrix );
-        mat4.rotate( newRotationMatrix, tdl .math .degToRad( pitch - lastPitch ), [-1, 0, 0] );
-        mat4.rotate( newRotationMatrix, tdl .math .degToRad( yaw - lastYaw ), [ 0, 0, -1] );
-        mat4.rotate( newRotationMatrix, tdl .math .degToRad( roll - lastRoll ), [ 0, 1, 0 ] );
-		lastYaw = yaw;
-        lastPitch = pitch;
-        lastRoll = roll;
-        
-        // mat4.multiply( newRotationMatrix, mouseRotationMatrix, mouseRotationMatrix );
-    }
-
-    function modelIsReady()
-    {
-        return scene && scene .render;
-    }
-
-    function render()
+    function render( scene, camera )
     {
         if ( !( scene && scene .render ) )
         {
             return;
         }
 
-        var uniforms = renderBegin( -1, scene .program );
-        scene .render();
-        renderEnd();
-
+        renderView( scene, camera, -1 );
         if ( stereoView )
         {
-            uniforms = renderBegin( 1, scene .program );
-            scene .render();
-            renderEnd();
+			renderView( scene, camera, 1 );
         }
     }
 
-    function renderBegin( eye, program )
+    function renderView( scene, camera, eye )
     {
         var m4 = tdl .fast .matrix4;
     
@@ -425,7 +303,6 @@ function CreateApp( canvas, gl, my3d )
 		var worldInverseTranspose = new Float32Array(16);
 		var viewProjection = new Float32Array(16);
 		var worldViewProjection = new Float32Array(16);
-		var viewProjectionInverse = new Float32Array(16);
 		var target = new Float32Array(3);
 		var up = new Float32Array([0,1,0]);
 		var lightWorldPos = new Float32Array(3);
@@ -465,67 +342,55 @@ function CreateApp( canvas, gl, my3d )
     
         gl.enable(gl.CULL_FACE);
         gl.enable(gl.DEPTH_TEST);
+        
+        // some of this should be encapsulated into camera
     
-        // Compute a projection and view matrices.
         m4.perspective( projection, tdl .math .degToRad( 20 ), aspectRatio, 1, 5000 );
     
-        eyePosition = [ 0, 0, -g_eyeRadius];
+        eyePosition = camera .getPosition();
         if ( stereoView )
         {
-            eyePosition = [ eye * g_eyeRadius * 0.06, 0, -g_eyeRadius];
-            target = [ 0, 0, -g_eyeRadius * 0.1 ];
+            eyePosition[ 0 ] = eyePosition[ 0 ] - eye * eyePosition[ 2 ] * 0.06;
+            target = [ 0, 0, eyePosition[ 2 ] * 0.1 ];
         }
     
         m4 .lookAt( view, eyePosition, target, up );
         m4 .mul( viewProjection, view, projection );
         m4 .inverse( viewInverse, view );
-        m4 .inverse( viewProjectionInverse, viewProjection );
     
         // Put the light near the camera
-        tdl .fast .mulScalarVector(lightWorldPos, 10, [0,0,-g_eyeRadius]);
+        tdl .fast .mulScalarVector( lightWorldPos, 10, eyePosition );
     
-    //     tdl .fast .rowMajor .mulMatrix4Vector( lightWorldPos, mouseRotationMatrix, lightWorldPos );
+    //     tdl .fast .rowMajor .mulMatrix4Vector( lightWorldPos, camera .viewRotationMatrix, lightWorldPos );
     
         // compute shared matrices
-        m4.translation(world, [0, 0, 0]);
-        m4.mul( worldRotation, world, mouseRotationMatrix );
-        m4.mul( worldViewProjection, worldRotation, viewProjection );
-        m4.inverse(worldInverse, worldRotation);
-        m4.transpose(worldInverseTranspose, worldInverse);
+        m4 .translation( world, [0, 0, 0] );
+        m4 .mul( worldRotation, world, camera .getRotation() );
+        m4 .mul( worldViewProjection, worldRotation, viewProjection );
+        m4 .inverse( worldInverse, worldRotation );
+        m4 .transpose( worldInverseTranspose, worldInverse );
 
-	    program .setUniform( 'viewInverse', viewInverse );
-	    program .setUniform( 'lightWorldPos', lightWorldPos );
-	    program .setUniform( 'worldInverseTranspose', worldInverseTranspose );
-	    program .setUniform( 'worldViewProjection', worldViewProjection );
+	    scene .program .setUniform( 'viewInverse', viewInverse );
+	    scene .program .setUniform( 'lightWorldPos', lightWorldPos );
+	    scene .program .setUniform( 'worldInverseTranspose', worldInverseTranspose );
+	    scene .program .setUniform( 'worldViewProjection', worldViewProjection );
 
-	    program .setUniform( 'specular', material .specular );
-	    program .setUniform( 'shininess', material .shininess );
-	    program .setUniform( 'specularFactor', material .specularFactor );
-    }
-    
-    function renderEnd()
-    {
+	    scene .program .setUniform( 'specular', material .specular );
+	    scene .program .setUniform( 'shininess', material .shininess );
+	    scene .program .setUniform( 'specularFactor', material .specularFactor );
+
+		scene .render();
+
 		// Set the alpha to 255.
-		gl.colorMask(false, false, false, true);
-		gl.clearColor(0, 0, 0, 1);
-		gl.clear(gl.COLOR_BUFFER_BIT);
+		gl.colorMask( false, false, false, true );
+		gl.clearColor( 0, 0, 0, 1 );
+		gl.clear( gl.COLOR_BUFFER_BIT );
     }
-
-    /* Initialization code. */
-
-    mat4 .identity( mouseRotationMatrix );
 
     return {
-        startLoading : startLoading,
+        startLoading      : startLoading,
         parseAndLoadScene : parseAndLoadScene,
-        render       : render,
-        handleScroll     : handleScroll,
-        handleMouseDown  : handleMouseDown,
-        handleMouseUp    : handleMouseUp,
-        handleMouseMove  : handleMouseMove,
-        handleTouchStart : handleTouchStart,
-        handleTouchMove  : handleTouchMove,
-        handleOrientationEvent : handleOrientationEvent,
+        render       	  : render,
     };
 }
 
@@ -541,13 +406,52 @@ function initialize()
     var nextButton;
     var prevButton;
 	var fileChooser;
+    var mouseDown = false;
+    // TODO encapsulate these
+	var lastRoll = 0;
+	var lastPitch = 0;
+	var lastYaw = 0;
+    	
+    var trackball = ( function( rotatable ) {
+    
+		var lastMouseX = null;
+		var lastMouseY = null;
+
+    	return {
+
+			reset : function( event )
+			{
+				lastMouseX = event .clientX;
+				lastMouseY = event .clientY;
+			},
+
+			roll : function( event )
+			{
+				var newX = event.clientX;
+				var newY = event.clientY;
+		
+				var deltaX = newX - lastMouseX;
+				var newRotationMatrix = mat4.create();
+				mat4.identity( newRotationMatrix );
+				mat4.rotate( newRotationMatrix, tdl .math .degToRad( deltaX / 3 ), [0, 1, 0] );
+		
+				var deltaY = newY - lastMouseY;
+				mat4.rotate( newRotationMatrix, tdl .math .degToRad( deltaY / 3 ), [-1, 0, 0] );
+		
+				rotatable .rotate( newRotationMatrix );
+		
+				lastMouseX = newX;
+				lastMouseY = newY;
+			}
+		};
+    }( camera ));
 
 	function hasClass(ele,cls) {
 		return ele.className.match(new RegExp('(\\s|^)'+cls+'(\\s|$)'));
 	}
 
 	function addClass(ele,cls) {
-		if (!this.hasClass(ele,cls)) {
+		if (!hasClass(ele,cls)) {
 			ele.className += " "+cls;
 		}
 	}
@@ -619,7 +523,7 @@ function initialize()
         fpsTimer.update(elapsedTime);
         fpsElem .innerHTML = fpsTimer.averageFPS;
         
-        app .render();
+        app .render( scene, camera );
     }
 
     canvas = document .getElementById( "modelView" );
@@ -633,18 +537,113 @@ function initialize()
     
     app = CreateApp( canvas, gl, my3d );
     
-	canvas .onmousedown = app .handleMouseDown;
-	canvas .addEventListener( 'touchstart', app .handleTouchStart );
-	canvas .addEventListener( 'touchmove', app .handleTouchMove );
-    document .onmouseup = app .handleMouseUp;
-    document .onmousemove = app .handleMouseMove;
-    if ( window .addEventListener ) {
-        window .addEventListener( 'DOMMouseScroll', app .handleScroll, false );
-		window .addEventListener( 'deviceorientation', app .handleOrientationEvent, false );
+	canvas .onmousedown = function( event )
+    {
+        mouseDown = true;
+        trackball .reset( event );
     }
-    window .onmousewheel = document .onmousewheel = app .handleScroll;
+    document .onmouseup = function( event )
+    {
+        mouseDown = false;
+    }
+    document .onmousemove = function( event )
+    {
+        if ( !mouseDown ) return;
+        trackball .roll( event );
+    }
+
+	canvas .addEventListener( 'touchstart', function( event )
+    {
+		if ( event && event .preventDefault )
+			event .preventDefault();
+        trackball .reset( event .touches[0] );
+    } );
+	canvas .addEventListener( 'touchmove', function( event )
+    {
+		if ( event && event .preventDefault )
+			event .preventDefault();
+		trackball .roll( event .touches[0] );
+    } );
+
+	var zoomWheel = function( event )
+    {
+        var delta = 0;
+        if ( !event )
+            event = window.event;
+        if ( event.wheelDelta )
+            delta = event .wheelDelta / 120; 
+        else if ( event.detail )
+            delta = - event .detail /3;
+        if ( delta )
+            camera .zoom( delta * 3 );
+        if ( event .preventDefault )
+            event .preventDefault();
+        event .returnValue = false;
+    }
+
+    var orientCamera = function( e )
+    {
+        // Get the orientation of the device in 3 axes, known as alpha, beta, and gamma, 
+        // represented in degrees from the initial orientation of the device on load
+ 
+        var yaw = e.alpha,
+            pitch = e.beta,
+            roll = e.gamma;
+ 
+        var newRotationMatrix = mat4.create();
+        mat4.identity( newRotationMatrix );
+        mat4.rotate( newRotationMatrix, tdl .math .degToRad( pitch - lastPitch ), [ -1, 0, 0 ] );
+        mat4.rotate( newRotationMatrix, tdl .math .degToRad( yaw - lastYaw ), [ 0, 0, -1 ] );
+        mat4.rotate( newRotationMatrix, tdl .math .degToRad( roll - lastRoll ), [ 0, 1, 0 ] );
+		lastYaw = yaw;
+        lastPitch = pitch;
+        lastRoll = roll;
+        
+        camera .rotate( newRotationMatrix );
+    }
+
+//     function handleKeyPress( event )
+//     {}
+//     window.addEventListener('keypress', handleKeyPress, false);
+
+    var animate = function()
+    {
+        var deltaX = 2;
+        var newRotationMatrix = mat4.create();
+        mat4.identity( newRotationMatrix );
+        mat4.rotate( newRotationMatrix, tdl .math .degToRad(deltaX / 3), [0, 1, 0] );
+        
+        var deltaY = 2;
+        mat4.rotate( newRotationMatrix, tdl .math .degToRad(deltaY / 3), [-1, 0, 0] );
+        
+        camera .rotate( newRotationMatrix );
+    }
+
+    if ( window .addEventListener ) {
+        window .addEventListener( 'DOMMouseScroll', zoomWheel, false );
+// 		window .addEventListener( 'deviceorientation', orientCamera, false );
+    }
+    window .onmousewheel = document .onmousewheel = zoomWheel;
 
     var modelPath = document .location .hash .substring(1);
+
+	var args = document.location.search.substring(1).split('&');
+	var argsParsed = {};
+	for (i=0; i < args.length; i++)
+	{
+		arg = unescape(args[i]);
+
+		if (arg.indexOf('=') == -1)
+		{
+			argsParsed[arg.trim()] = true;
+		}
+		else
+		{
+			kvp = arg.split('=');
+			argsParsed[kvp[0].trim()] = kvp[1].trim();
+		}
+	}
+
 	var dist, distStr;
 	dist = 240;
 	nextButton = document .getElementById( 'next' );
