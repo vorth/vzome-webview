@@ -13,247 +13,245 @@ var canvas;   // required as a global by tdl
 var scene;
 var camera = (function () {
 
-	var distance = 300;
+    var distance = 300;
     var viewRotationMatrix = mat4 .create();
-	
-	mat4 .identity( viewRotationMatrix );
+    
+    mat4 .identity( viewRotationMatrix );
 
-	return {
+    return {
 
-		zoom : function( delta )
-		{
-			if ( distance >= delta )
-				distance = distance - delta;
-		},
-		
-		setDistance : function( cameraDistance )
-		{
-			distance = cameraDistance;
-		},
+        zoom : function( delta )
+        {
+            if ( distance >= delta )
+                distance = distance - delta;
+        },
+        
+        setDistance : function( cameraDistance )
+        {
+            distance = cameraDistance;
+        },
 
-		rotate : function( rotation )
-		{
-			mat4 .multiply( rotation, viewRotationMatrix, viewRotationMatrix );
-		},
-		
-		getPosition : function()
-		{
-			return [ 0, 0, -distance ];
-		},
-		
-		getRotation : function()
-		{
-			return viewRotationMatrix;
-		}
-	
-	};
+        rotate : function( rotation )
+        {
+            mat4 .multiply( rotation, viewRotationMatrix, viewRotationMatrix );
+        },
+        
+        getPosition : function()
+        {
+            return [ 0, 0, -distance ];
+        },
+        
+        getRotation : function()
+        {
+            return viewRotationMatrix;
+        }
+    
+    };
 }());
 
-function parseAndLoadScene( json )
+function decodeScene( data )
 {
-	var newInstances = [],
-		models = [],
-		arrayInstances = [];
-	var ii, jj;
-	var newShapes = [];
-	var model;
-	var uniform;
-	var index;
-	var attribBuffer;
-	var expanded;
-	var vertexShaderSrc;
-	var fragmentShaderSrc;
+    var newInstances = [],
+        meshes = [],
+        arrayInstances = [];
+    var ii, jj;
+    var newShapes = [];
+    var mesh;
+    var uniform;
+    var index;
+    var attribBuffer;
+    var expanded;
+    var vertexShaderSrc;
+    var fragmentShaderSrc;
+    var newScene = {};
 
-	scene = JSON.parse( json );
+    newScene .background = data .background || [ 0.6, 0.6, 0.6 ];
 
-	if ( ! scene .background )
-	{
-		scene .background = [ 0.6, 0.6, 0.6 ];
-	}
+    vertexShaderSrc = [
 
-	vertexShaderSrc = [
+        "uniform mat4 viewInverse;",
+        "uniform vec3 lightWorldPos;",
+        "uniform mat4 worldViewProjection;",
+        "uniform mat4 worldInverseTranspose;",
+        "uniform mat4 orientations[" + data .orientations .length / 16 + "];",
 
-		"uniform mat4 viewInverse;",
-		"uniform vec3 lightWorldPos;",
-		"uniform mat4 worldViewProjection;",
-		"uniform mat4 worldInverseTranspose;",
-		"uniform mat4 orientations[" + scene .orientations .length / 16 + "];",
+        "attribute vec4 position;",
+        "attribute vec3 normal;",
+        "attribute vec3 worldPosition;",
+        "attribute vec4 colorMult;",
+        "attribute vec2 orientation;",
 
-		"attribute vec4 position;",
-		"attribute vec3 normal;",
-		"attribute vec3 worldPosition;",
-		"attribute vec4 colorMult;",
-		"attribute vec2 orientation;",
+        "varying vec3 v_normal;",
+        "varying vec3 v_surfaceToLight;",
+        "varying vec3 v_surfaceToView;",
+        "varying vec4 v_colorMult;",
 
-		"varying vec3 v_normal;",
-		"varying vec3 v_surfaceToLight;",
-		"varying vec3 v_surfaceToView;",
-		"varying vec4 v_colorMult;",
+        "void main()",
+        "{",
+        "    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
+        "    vec4 wp = oriented + vec4(worldPosition, 0);",
+        "    gl_Position = (worldViewProjection * wp);",
+        "    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
+        "    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
+        "    v_colorMult = colorMult;",
+        "    v_surfaceToLight = lightWorldPos - wp.xyz;",
+        "    v_surfaceToView = (viewInverse[3] - wp).xyz;",
+        "}"
+    
+    ] .join("\n");
+    
+    fragmentShaderSrc = [
 
-		"void main()",
-		"{",
-		"    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
-		"    vec4 wp = oriented + vec4(worldPosition, 0);",
-		"    gl_Position = (worldViewProjection * wp);",
-		"    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
-		"    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
-		"    v_colorMult = colorMult;",
-		"    v_surfaceToLight = lightWorldPos - wp.xyz;",
-		"    v_surfaceToView = (viewInverse[3] - wp).xyz;",
-		"}"
-	
-	] .join("\n");
-	
-	fragmentShaderSrc = [
+        "#ifdef GL_ES",
+        "precision highp float;",
+        "#endif",
 
-		"#ifdef GL_ES",
-		"precision highp float;",
-		"#endif",
+        "varying vec3 v_normal;",
+        "varying vec3 v_surfaceToLight;",
+        "varying vec3 v_surfaceToView;",
+        "varying vec4 v_colorMult;",
 
-		"varying vec3 v_normal;",
-		"varying vec3 v_surfaceToLight;",
-		"varying vec3 v_surfaceToView;",
-		"varying vec4 v_colorMult;",
+        "uniform vec4 specular;",
+        "uniform float shininess;",
+        "uniform float specularFactor;",
 
-		"uniform vec4 specular;",
-		"uniform float shininess;",
-		"uniform float specularFactor;",
+        "vec4 lit( float l ,float h, float m )",
+        "{",
+        "    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
+        "}",
 
-		"vec4 lit( float l ,float h, float m )",
-		"{",
-		"    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
-		"}",
+        "void main()",
+        "{",
+        "    vec3 normal = normalize( v_normal );",
+        "    vec3 surfaceToLight = normalize( v_surfaceToLight );",
+        "    vec3 surfaceToView = normalize( v_surfaceToView );",
+        "    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
+        "    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
+        "    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_colorMult * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
+        "}"
+    
+    ] .join("\n");
 
-		"void main()",
-		"{",
-		"    vec3 normal = normalize( v_normal );",
-		"    vec3 surfaceToLight = normalize( v_surfaceToLight );",
-		"    vec3 surfaceToView = normalize( v_surfaceToView );",
-		"    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
-		"    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
-		"    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_colorMult * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
-		"}"
-	
-	] .join("\n");
+    newScene .program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
 
-	scene .program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
+    for ( ii = 0; ii < data .instances .length; ++ii )
+    {
+        newInstances .push({
+          x: data .instances[ ii ] .location[ 0 ],
+          y: data .instances[ ii ] .location[ 1 ],
+          z: data .instances[ ii ] .location[ 2 ],
+          colorMult: new Float32Array( data .instances[ ii ] .color ),
+          arrayIndex: data .instances[ ii ] .shape,
+          orientation: data .instances[ ii ] .orientation
+        });
+    }
 
-	for ( ii = 0; ii < scene .instances .length; ++ii )
-	{
-		newInstances .push({
-		  x: scene .instances[ ii ] .location[ 0 ],
-		  y: scene .instances[ ii ] .location[ 1 ],
-		  z: scene .instances[ ii ] .location[ 2 ],
-		  colorMult: new Float32Array( scene .instances[ ii ] .color ),
-		  arrayIndex: scene .instances[ ii ] .shape,
-		  orientation: scene .instances[ ii ] .orientation
-		});
-	}
+    for ( jj = 0; jj < data .shapes.length; ++jj ) {
+        var shape = data .shapes[ jj ];
+        var positions = new tdl.primitives.AttribBuffer(3, shape.position.length);
+        for ( ii = 0; ii < shape.position.length; ++ii) {
+            positions.push(shape.position[ ii ]);
+        }
+        var normals = new tdl.primitives.AttribBuffer(3, shape.normal.length);
+        for ( ii = 0; ii < shape.normal.length; ++ii) {
+            normals.push(shape.normal[ ii ]);
+        }
+        var indices = new tdl.primitives.AttribBuffer(3, shape.indices.length, 'Uint16Array');
+        for ( ii = 0; ii < shape.indices.length; ++ii) {
+            indices.push(shape.indices[ ii ]);
+        }
+        newShapes.push({
+            position:positions,
+            normal:normals,
+            indices:indices,
+            // Add extra fields to each geometry
+            worldPosition:new tdl.primitives.AttribBuffer(3, shape.position.length),
+            colorMult:new tdl.primitives.AttribBuffer(4, shape.position.length),
+            orientation:new tdl.primitives.AttribBuffer(2, shape.position.length)
+        });
+    }
 
-	for ( jj = 0; jj < scene.shapes.length; ++jj ) {
-		var shape = scene.shapes[ jj ];
-		var positions = new tdl.primitives.AttribBuffer(3, shape.position.length);
-		for ( ii = 0; ii < shape.position.length; ++ii) {
-			positions.push(shape.position[ ii ]);
-		}
-		var normals = new tdl.primitives.AttribBuffer(3, shape.normal.length);
-		for ( ii = 0; ii < shape.normal.length; ++ii) {
-			normals.push(shape.normal[ ii ]);
-		}
-		var indices = new tdl.primitives.AttribBuffer(3, shape.indices.length, 'Uint16Array');
-		for ( ii = 0; ii < shape.indices.length; ++ii) {
-			indices.push(shape.indices[ ii ]);
-		}
-		newShapes.push({
-			position:positions,
-			normal:normals,
-			indices:indices,
-			// Add extra fields to each geometry
-			worldPosition:new tdl.primitives.AttribBuffer(3, shape.position.length),
-			colorMult:new tdl.primitives.AttribBuffer(4, shape.position.length),
-			orientation:new tdl.primitives.AttribBuffer(2, shape.position.length)
-		});
-	}
+    // Expand data .shapes from newInstances to geometry.
 
-	// Expand scene.shapes from newInstances to geometry.
+    // Step 2: convert newInstances to expanded geometry
+    for ( ii = 0; ii < newInstances.length; ++ii) {
+        arrayInstances.push(newShapes[ newInstances[ii].arrayIndex ]);
+    }
+    expanded = tdl.primitives.concatLarge( arrayInstances );
 
-	// Step 2: convert newInstances to expanded geometry
-	for ( ii = 0; ii < newInstances.length; ++ii) {
-		arrayInstances.push(newShapes[ newInstances[ii].arrayIndex ]);
-	}
-	expanded = tdl.primitives.concatLarge(arrayInstances);
+    // Step 3: Make meshes from our expanded geometry.
+    for ( ii = 0; ii < expanded.arrays.length; ++ii )
+        meshes .push( new tdl.models.Model( newScene .program, expanded .arrays[ii], null ) );
 
-	// Step 3: Make models from our expanded geometry.
-	for ( ii = 0; ii < expanded.arrays.length; ++ii) {
-		model = new tdl.models.Model( scene .program, expanded.arrays[ii], null );
-		models.push(model);
-	}
+    // Step 4: Copy in Colors
+    for ( ii = 0; ii < newInstances.length; ++ii) {
+        index = expanded .instances[ii] .arrayIndex;
+        newInstances[ii] .firstVertex = expanded .instances[ii] .firstVertex;
+        newInstances[ii] .numVertices = expanded .instances[ii] .numVertices;
+        newInstances[ii] .expandedArrayIndex = index;
+        attribBuffer = expanded .arrays[index] .colorMult;
+        attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices, newInstances[ii] .colorMult );
+    }
+    for ( ii = 0; ii < meshes.length; ++ii) {
+        attribBuffer = expanded.arrays[ii].colorMult;
+        meshes[ii] .setBuffer( 'colorMult', attribBuffer );
+    }
 
-	// Step 4: Copy in Colors
-	for ( ii = 0; ii < newInstances.length; ++ii) {
-		index = expanded .instances[ii] .arrayIndex;
-		newInstances[ii] .firstVertex = expanded .instances[ii] .firstVertex;
-		newInstances[ii] .numVertices = expanded .instances[ii] .numVertices;
-		newInstances[ii] .expandedArrayIndex = index;
-		attribBuffer = expanded .arrays[index] .colorMult;
-		attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices, newInstances[ii] .colorMult );
-	}
-	for ( ii = 0; ii < models.length; ++ii) {
-		attribBuffer = expanded.arrays[ii].colorMult;
-		models[ii].setBuffer('colorMult', attribBuffer);
-	}
+    // copy in worldPosition
+    for ( ii = 0; ii < newInstances.length; ++ii) {
+        index = newInstances[ii] .expandedArrayIndex;
+        attribBuffer = expanded.arrays[index].worldPosition;
+        attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices,
+                                [ newInstances[ii].x, newInstances[ii].y, newInstances[ii].z ] );
+    }
+    for ( ii = 0; ii < meshes.length; ++ii) {
+        attribBuffer = expanded.arrays[ii].worldPosition;
+        meshes[ii] .setBuffer( 'worldPosition', attribBuffer );
+    }
 
-	// copy in worldPosition
-	for ( ii = 0; ii < newInstances.length; ++ii) {
-		index = newInstances[ii] .expandedArrayIndex;
-		attribBuffer = expanded.arrays[index].worldPosition;
-		attribBuffer.fillRange( newInstances[ii] .firstVertex, newInstances[ii] .numVertices,
-								[ newInstances[ii].x, newInstances[ii].y, newInstances[ii].z ] );
-	}
-	for ( ii = 0; ii < models.length; ++ii) {
-		attribBuffer = expanded.arrays[ii].worldPosition;
-		models[ii].setBuffer('worldPosition', attribBuffer);
-	}
+    // copy in orientation
+    for ( ii = 0; ii < newInstances.length; ++ii) {
+        var instance = newInstances[ii];
+        var index = instance.expandedArrayIndex;
+        attribBuffer = expanded.arrays[index].orientation;
+        attribBuffer.fillRange(instance.firstVertex, instance.numVertices, [instance.orientation, 0]);
+    }
+    for ( ii = 0; ii < meshes.length; ++ii) {
+        attribBuffer = expanded.arrays[ii].orientation;
+        meshes[ii] .setBuffer( 'orientation', attribBuffer );
+    }
 
-	// copy in orientation
-	for ( ii = 0; ii < newInstances.length; ++ii) {
-		var instance = newInstances[ii];
-		var index = instance.expandedArrayIndex;
-		attribBuffer = expanded.arrays[index].orientation;
-		attribBuffer.fillRange(instance.firstVertex, instance.numVertices, [instance.orientation, 0]);
-	}
-	for ( ii = 0; ii < models.length; ++ii) {
-		attribBuffer = expanded.arrays[ii].orientation;
-		models[ii].setBuffer('orientation', attribBuffer);
-	}
-
-	scene .render = function () {
-	    this .program .setUniform( 'orientations', scene .orientations );
-		for ( ii = 0; ii < models.length; ++ii) {
-			model = models[ii];
-			model .drawPrep();
-			model .draw();
-		}
-	}
+    newScene .render = function () {
+    	var oneMesh;
+        this .program .setUniform( 'orientations', data .orientations );
+        for ( ii = 0; ii < meshes.length; ++ii ) {
+            oneMesh = meshes[ii];
+            oneMesh .drawPrep();
+            oneMesh .draw();
+        }
+    }
+    return newScene;
 }
 
 function startLoading( modelUrl, cameraDistance )
 {
-	camera .setDistance( cameraDistance );
-	scene = null; // this disables rendering while loading a different model
+    camera .setDistance( cameraDistance );
+    scene = null; // this disables rendering while loading a different model
 
-	if ( modelUrl .indexOf( "http" ) === 0 )
-	{
-		modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
-	}
-	var request = new XMLHttpRequest();
-	request.open( "GET", modelUrl );
-	request.onreadystatechange = function () {
-		if ( request.readyState === 4 ) {
-		   parseAndLoadScene( request.responseText );
-		}
-	}
-	request.send();
+    if ( modelUrl .indexOf( "http" ) === 0 )
+    {
+        modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
+    }
+    var request = new XMLHttpRequest();
+    request.open( "GET", modelUrl );
+    request.onreadystatechange = function () {
+        if ( request .readyState === 4 ) {
+            parsed = JSON.parse( request .responseText );
+
+			scene = decodeScene( parsed );
+        }
+    }
+    request.send();
 }
 
 function CreateApp( canvas, gl, my3d )
@@ -261,10 +259,10 @@ function CreateApp( canvas, gl, my3d )
     var stereoView = my3d;
     
     var material = {
-			specular       : new Float32Array([1,1,1,1]),
-			shininess      : 50,
-			specularFactor : 0.2
-    	};
+            specular       : new Float32Array([1,1,1,1]),
+            shininess      : 50,
+            specularFactor : 0.2
+        };
 
     function render( scene, camera )
     {
@@ -276,7 +274,7 @@ function CreateApp( canvas, gl, my3d )
         renderView( scene, camera, -1 );
         if ( stereoView )
         {
-			renderView( scene, camera, 1 );
+            renderView( scene, camera, 1 );
         }
     }
 
@@ -292,20 +290,20 @@ function CreateApp( canvas, gl, my3d )
         var height = Math.floor( canvas.height * 0.9 );
         var bottom = Math.floor( canvas.height * 0.05 );
         var aspectRatio = canvas.clientWidth / canvas.clientHeight;
-		var viewInverse = new Float32Array(16);
+        var viewInverse = new Float32Array(16);
         var eyePosition;
     
-		var projection = new Float32Array(16);
-		var view = new Float32Array(16);
-		var worldRotation = new Float32Array(16);
-		var world = new Float32Array(16);
-		var worldInverse = new Float32Array(16);
-		var worldInverseTranspose = new Float32Array(16);
-		var viewProjection = new Float32Array(16);
-		var worldViewProjection = new Float32Array(16);
-		var target = new Float32Array(3);
-		var up = new Float32Array([0,1,0]);
-		var lightWorldPos = new Float32Array(3);
+        var projection = new Float32Array(16);
+        var view = new Float32Array(16);
+        var worldRotation = new Float32Array(16);
+        var world = new Float32Array(16);
+        var worldInverse = new Float32Array(16);
+        var worldInverseTranspose = new Float32Array(16);
+        var viewProjection = new Float32Array(16);
+        var worldViewProjection = new Float32Array(16);
+        var target = new Float32Array(3);
+        var up = new Float32Array([0,1,0]);
+        var lightWorldPos = new Float32Array(3);
 
         var my3dTop = 40,
             my3dLeftLeft = 0,
@@ -370,33 +368,32 @@ function CreateApp( canvas, gl, my3d )
         m4 .inverse( worldInverse, worldRotation );
         m4 .transpose( worldInverseTranspose, worldInverse );
 
-	    scene .program .setUniform( 'viewInverse', viewInverse );
-	    scene .program .setUniform( 'lightWorldPos', lightWorldPos );
-	    scene .program .setUniform( 'worldInverseTranspose', worldInverseTranspose );
-	    scene .program .setUniform( 'worldViewProjection', worldViewProjection );
+        scene .program .setUniform( 'viewInverse', viewInverse );
+        scene .program .setUniform( 'lightWorldPos', lightWorldPos );
+        scene .program .setUniform( 'worldInverseTranspose', worldInverseTranspose );
+        scene .program .setUniform( 'worldViewProjection', worldViewProjection );
 
-	    scene .program .setUniform( 'specular', material .specular );
-	    scene .program .setUniform( 'shininess', material .shininess );
-	    scene .program .setUniform( 'specularFactor', material .specularFactor );
+        scene .program .setUniform( 'specular', material .specular );
+        scene .program .setUniform( 'shininess', material .shininess );
+        scene .program .setUniform( 'specularFactor', material .specularFactor );
 
-		scene .render();
+        scene .render();
 
-		// Set the alpha to 255.
-		gl.colorMask( false, false, false, true );
-		gl.clearColor( 0, 0, 0, 1 );
-		gl.clear( gl.COLOR_BUFFER_BIT );
+        // Set the alpha to 255.
+        gl.colorMask( false, false, false, true );
+        gl.clearColor( 0, 0, 0, 1 );
+        gl.clear( gl.COLOR_BUFFER_BIT );
     }
 
     return {
         startLoading      : startLoading,
-        parseAndLoadScene : parseAndLoadScene,
-        render       	  : render,
+        render            : render,
     };
 }
 
 function initialize()
 {
-	var app;
+    var app;
     var gl;                   // the gl context.
     var then = (new Date()).getTime() * 0.001;
     var fpsTimer = new tdl .fps .FPSTimer();
@@ -405,73 +402,73 @@ function initialize()
     var modelList;
     var nextButton;
     var prevButton;
-	var fileChooser;
+    var fileChooser;
     var mouseDown = false;
     // TODO encapsulate these
-	var lastRoll = 0;
-	var lastPitch = 0;
-	var lastYaw = 0;
-    	
+    var lastRoll = 0;
+    var lastPitch = 0;
+    var lastYaw = 0;
+        
     var trackball = ( function( rotatable ) {
     
-		var lastMouseX = null;
-		var lastMouseY = null;
+        var lastMouseX = null;
+        var lastMouseY = null;
 
-    	return {
+        return {
 
-			reset : function( event )
-			{
-				lastMouseX = event .clientX;
-				lastMouseY = event .clientY;
-			},
+            reset : function( event )
+            {
+                lastMouseX = event .clientX;
+                lastMouseY = event .clientY;
+            },
 
-			roll : function( event )
-			{
-				var newX = event.clientX;
-				var newY = event.clientY;
-		
-				var deltaX = newX - lastMouseX;
-				var newRotationMatrix = mat4.create();
-				mat4.identity( newRotationMatrix );
-				mat4.rotate( newRotationMatrix, tdl .math .degToRad( deltaX / 3 ), [0, 1, 0] );
-		
-				var deltaY = newY - lastMouseY;
-				mat4.rotate( newRotationMatrix, tdl .math .degToRad( deltaY / 3 ), [-1, 0, 0] );
-		
-				rotatable .rotate( newRotationMatrix );
-		
-				lastMouseX = newX;
-				lastMouseY = newY;
-			}
-		};
+            roll : function( event )
+            {
+                var newX = event.clientX;
+                var newY = event.clientY;
+        
+                var deltaX = newX - lastMouseX;
+                var newRotationMatrix = mat4.create();
+                mat4.identity( newRotationMatrix );
+                mat4.rotate( newRotationMatrix, tdl .math .degToRad( deltaX / 3 ), [0, 1, 0] );
+        
+                var deltaY = newY - lastMouseY;
+                mat4.rotate( newRotationMatrix, tdl .math .degToRad( deltaY / 3 ), [-1, 0, 0] );
+        
+                rotatable .rotate( newRotationMatrix );
+        
+                lastMouseX = newX;
+                lastMouseY = newY;
+            }
+        };
     }( camera ));
 
-	function hasClass(ele,cls) {
-		return ele.className.match(new RegExp('(\\s|^)'+cls+'(\\s|$)'));
-	}
+    function hasClass(ele,cls) {
+        return ele.className.match(new RegExp('(\\s|^)'+cls+'(\\s|$)'));
+    }
 
-	function addClass(ele,cls) {
-		if (!hasClass(ele,cls)) {
-			ele.className += " "+cls;
-		}
-	}
+    function addClass(ele,cls) {
+        if (!hasClass(ele,cls)) {
+            ele.className += " "+cls;
+        }
+    }
 
-	function removeClass(ele,cls) {
-		if (hasClass(ele,cls)) {
-			var reg = new RegExp('(\\s|^)'+cls+'(\\s|$)');
-			ele.className=ele.className.replace(reg,' ');
-		}
-	}
+    function removeClass(ele,cls) {
+        if (hasClass(ele,cls)) {
+            var reg = new RegExp('(\\s|^)'+cls+'(\\s|$)');
+            ele.className=ele.className.replace(reg,' ');
+        }
+    }
 
     var nextModel = function() {
-		var dist, distStr;
+        var dist, distStr;
         if ( currentModel < modelList .length - 1 ) {
             currentModel = currentModel + 1;
             modelPath = modelList[ currentModel ] .firstChild .nodeValue;
-			distStr = modelList[ currentModel ] .getAttribute( "cameraDistance" );
-			if ( distStr ) {
-				dist = parseInt( distStr );
-			}
+            distStr = modelList[ currentModel ] .getAttribute( "cameraDistance" );
+            if ( distStr ) {
+                dist = parseInt( distStr );
+            }
             app .startLoading( modelPath, dist );
             removeClass( prevButton, "inactive" );
             if ( currentModel === modelList .length - 1 ) {
@@ -484,10 +481,10 @@ function initialize()
         if ( currentModel > 0 ) {
             currentModel = currentModel - 1;
             modelPath = modelList[ currentModel ] .firstChild .nodeValue;
-			distStr = modelList[ currentModel ] .getAttribute( "cameraDistance" );
-			if ( distStr ) {
-				dist = parseInt( distStr );
-			}
+            distStr = modelList[ currentModel ] .getAttribute( "cameraDistance" );
+            if ( distStr ) {
+                dist = parseInt( distStr );
+            }
             app .startLoading( modelPath, dist );
             removeClass( nextButton, "inactive" );
             if ( currentModel === 0 ) {
@@ -496,17 +493,17 @@ function initialize()
         }
     }
 
-	var openFile = function() {
-		filepicker.pick( { extension: '.vZome' },
-		  function( FPFile ){
-			console .log( JSON.stringify( FPFile ) );
-			app .startLoading( FPFile.url, 300 );
-		  }
-		);
-	}
+    var openFile = function() {
+        filepicker.pick( { extension: '.vZome' },
+          function( FPFile ){
+            console .log( JSON.stringify( FPFile ) );
+            app .startLoading( FPFile.url, 300 );
+          }
+        );
+    }
  
     var handleDropBox = function( e ) {
-		app .startLoading( e.files[0].link, 300 );
+        app .startLoading( e.files[0].link, 300 );
     }
  
     function render()
@@ -537,7 +534,7 @@ function initialize()
     
     app = CreateApp( canvas, gl, my3d );
     
-	canvas .onmousedown = function( event )
+    canvas .onmousedown = function( event )
     {
         mouseDown = true;
         trackball .reset( event );
@@ -552,20 +549,20 @@ function initialize()
         trackball .roll( event );
     }
 
-	canvas .addEventListener( 'touchstart', function( event )
+    canvas .addEventListener( 'touchstart', function( event )
     {
-		if ( event && event .preventDefault )
-			event .preventDefault();
+        if ( event && event .preventDefault )
+            event .preventDefault();
         trackball .reset( event .touches[0] );
     } );
-	canvas .addEventListener( 'touchmove', function( event )
+    canvas .addEventListener( 'touchmove', function( event )
     {
-		if ( event && event .preventDefault )
-			event .preventDefault();
-		trackball .roll( event .touches[0] );
+        if ( event && event .preventDefault )
+            event .preventDefault();
+        trackball .roll( event .touches[0] );
     } );
 
-	var zoomWheel = function( event )
+    var zoomWheel = function( event )
     {
         var delta = 0;
         if ( !event )
@@ -595,7 +592,7 @@ function initialize()
         mat4.rotate( newRotationMatrix, tdl .math .degToRad( pitch - lastPitch ), [ -1, 0, 0 ] );
         mat4.rotate( newRotationMatrix, tdl .math .degToRad( yaw - lastYaw ), [ 0, 0, -1 ] );
         mat4.rotate( newRotationMatrix, tdl .math .degToRad( roll - lastRoll ), [ 0, 1, 0 ] );
-		lastYaw = yaw;
+        lastYaw = yaw;
         lastPitch = pitch;
         lastRoll = roll;
         
@@ -621,61 +618,61 @@ function initialize()
 
     if ( window .addEventListener ) {
         window .addEventListener( 'DOMMouseScroll', zoomWheel, false );
-// 		window .addEventListener( 'deviceorientation', orientCamera, false );
+//      window .addEventListener( 'deviceorientation', orientCamera, false );
     }
     window .onmousewheel = document .onmousewheel = zoomWheel;
 
     var modelPath = document .location .hash .substring(1);
 
-	var args = document.location.search.substring(1).split('&');
-	var argsParsed = {};
-	for (i=0; i < args.length; i++)
-	{
-		arg = unescape(args[i]);
+    var args = document.location.search.substring(1).split('&');
+    var argsParsed = {};
+    for (i=0; i < args.length; i++)
+    {
+        arg = unescape(args[i]);
 
-		if (arg.indexOf('=') == -1)
-		{
-			argsParsed[arg.trim()] = true;
-		}
-		else
-		{
-			kvp = arg.split('=');
-			argsParsed[kvp[0].trim()] = kvp[1].trim();
-		}
-	}
+        if (arg.indexOf('=') == -1)
+        {
+            argsParsed[arg.trim()] = true;
+        }
+        else
+        {
+            kvp = arg.split('=');
+            argsParsed[kvp[0].trim()] = kvp[1].trim();
+        }
+    }
 
-	var dist, distStr;
-	dist = 240;
-	nextButton = document .getElementById( 'next' );
-	prevButton = document .getElementById( 'prev' );
-	openButton = document .getElementById( 'open' );
+    var dist, distStr;
+    dist = 240;
+    nextButton = document .getElementById( 'next' );
+    prevButton = document .getElementById( 'prev' );
+    openButton = document .getElementById( 'open' );
     if ( modelPath )
     {
-		if ( nextButton ) addClass( nextButton, "inactive" );
-		if ( prevButton ) addClass( prevButton, "inactive" );
+        if ( nextButton ) addClass( nextButton, "inactive" );
+        if ( prevButton ) addClass( prevButton, "inactive" );
 
-		if ( modelPath .indexOf( '.json', modelPath.length - 5 ) == -1 )
-			modelPath = modelPath + '.json';
-	}
-	else
-	{
+        if ( modelPath .indexOf( '.json', modelPath.length - 5 ) == -1 )
+            modelPath = modelPath + '.json';
+    }
+    else
+    {
         modelList = document .getElementById( "models" ) .getElementsByTagName( 'li' );
         modelPath = modelList[ 0 ] .firstChild .nodeValue;
-		distStr = modelList[ 0 ] .getAttribute( "cameraDistance" );
-		if ( distStr ) {
-			dist = parseInt( distStr );
-		}
+        distStr = modelList[ 0 ] .getAttribute( "cameraDistance" );
+        if ( distStr ) {
+            dist = parseInt( distStr );
+        }
 
-		filepicker.setKey( 'ACWyTwSaKo1IMsum2ajglz' );
+        filepicker.setKey( 'ACWyTwSaKo1IMsum2ajglz' );
         nextButton .addEventListener( 'click', nextModel, false );
         prevButton .addEventListener( 'click', prevModel, false );
         openButton .addEventListener( 'click', openFile, false );
 
-		fileChooser = document .getElementById( 'file-chooser' );
-		if ( fileChooser )
-		{
-			fileChooser .addEventListener( 'DbxChooserSuccess', handleDropBox, false );
-		}
+        fileChooser = document .getElementById( 'file-chooser' );
+        if ( fileChooser )
+        {
+            fileChooser .addEventListener( 'DbxChooserSuccess', handleDropBox, false );
+        }
     }
 
     app .startLoading( modelPath, dist );
