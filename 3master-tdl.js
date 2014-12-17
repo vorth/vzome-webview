@@ -14,7 +14,7 @@ threemaster.makeCamera = function () {
         {
             distance = 300;
             viewRotationMatrix = mat4 .create();
-			mat4 .identity( viewRotationMatrix );
+            mat4 .identity( viewRotationMatrix );
         },
 
         zoom : function( delta )
@@ -95,15 +95,15 @@ threemaster.makeRenderer = function( canvas, scene, camera, stereoView ) {
     
     return {
         render : function ()
-		{
-		    var aspectRatio = setViewport( -1 );
-			scene .render( gl, aspectRatio, stereoView, -1 );
-			if ( stereoView )
-			{
+        {
+            var aspectRatio = setViewport( -1 );
+            scene .render( gl, aspectRatio, stereoView, -1 );
+            if ( stereoView )
+            {
                 aspectRatio = setViewport( 1 );
-				scene .render( gl, aspectRatio, stereoView, 1 );
-			}
-		}
+                scene .render( gl, aspectRatio, stereoView, 1 );
+            }
+        }
     };
 }
 

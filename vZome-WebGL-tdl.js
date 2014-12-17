@@ -17,148 +17,148 @@ var makeScene = function( camera )
     var program;
     var backgroundColor;
 
-	function load( data )
-	{
-		var arrayInstances = [];
-		var ii, jj, num, mm;
-		var newShapes = [];
-		var mesh, shape, positions, normals, indices;
-		var attribBuffer;
-		var expanded;
-		var vertexShaderSrc;
-		var fragmentShaderSrc;
+    function load( data )
+    {
+        var arrayInstances = [];
+        var ii, jj, num, mm;
+        var newShapes = [];
+        var mesh, shape, positions, normals, indices;
+        var attribBuffer;
+        var expanded;
+        var vertexShaderSrc;
+        var fragmentShaderSrc;
 
-		backgroundColor = data .background || [ 0.6, 0.6, 0.6 ];
+        backgroundColor = data .background || [ 0.6, 0.6, 0.6 ];
 
-		vertexShaderSrc = [
+        vertexShaderSrc = [
 
-			"uniform mat4 viewInverse;",
-			"uniform vec3 lightWorldPos;",
-			"uniform mat4 worldViewProjection;",
-			"uniform mat4 worldInverseTranspose;",
-			"uniform mat4 orientations[" + data .orientations .length / 16 + "];",
+            "uniform mat4 viewInverse;",
+            "uniform vec3 lightWorldPos;",
+            "uniform mat4 worldViewProjection;",
+            "uniform mat4 worldInverseTranspose;",
+            "uniform mat4 orientations[" + data .orientations .length / 16 + "];",
 
-			"attribute vec4 position;",
-			"attribute vec3 normal;",
-			"attribute vec3 worldPosition;",
-			"attribute vec4 color;",
-			"attribute vec2 orientation;",
+            "attribute vec4 position;",
+            "attribute vec3 normal;",
+            "attribute vec3 worldPosition;",
+            "attribute vec4 color;",
+            "attribute vec2 orientation;",
 
-			"varying vec3 v_normal;",
-			"varying vec3 v_surfaceToLight;",
-			"varying vec3 v_surfaceToView;",
-			"varying vec4 v_color;",
+            "varying vec3 v_normal;",
+            "varying vec3 v_surfaceToLight;",
+            "varying vec3 v_surfaceToView;",
+            "varying vec4 v_color;",
 
-			"void main()",
-			"{",
-			"    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
-			"    vec4 wp = oriented + vec4(worldPosition, 0);",
-			"    gl_Position = (worldViewProjection * wp);",
-			"    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
-			"    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
-			"    v_color = color;",
-			"    v_surfaceToLight = lightWorldPos - wp.xyz;",
-			"    v_surfaceToView = (viewInverse[3] - wp).xyz;",
-			"}"
-	
-		] .join("\n");
-	
-		fragmentShaderSrc = [
+            "void main()",
+            "{",
+            "    vec4 oriented = ( orientations[ int(orientation.x) ] * position );",
+            "    vec4 wp = oriented + vec4(worldPosition, 0);",
+            "    gl_Position = (worldViewProjection * wp);",
+            "    vec4 orientedNormal = ( orientations[ int(orientation.x) ] * vec4(normal, 0) );",
+            "    v_normal = (worldInverseTranspose * orientedNormal).xyz;",
+            "    v_color = color;",
+            "    v_surfaceToLight = lightWorldPos - wp.xyz;",
+            "    v_surfaceToView = (viewInverse[3] - wp).xyz;",
+            "}"
+    
+        ] .join("\n");
+    
+        fragmentShaderSrc = [
 
-			"#ifdef GL_ES",
-			"precision highp float;",
-			"#endif",
+            "#ifdef GL_ES",
+            "precision highp float;",
+            "#endif",
 
-			"varying vec3 v_normal;",
-			"varying vec3 v_surfaceToLight;",
-			"varying vec3 v_surfaceToView;",
-			"varying vec4 v_color;",
+            "varying vec3 v_normal;",
+            "varying vec3 v_surfaceToLight;",
+            "varying vec3 v_surfaceToView;",
+            "varying vec4 v_color;",
 
-			"uniform vec4 specular;",
-			"uniform float shininess;",
-			"uniform float specularFactor;",
+            "uniform vec4 specular;",
+            "uniform float shininess;",
+            "uniform float specularFactor;",
 
-			"vec4 lit( float l ,float h, float m )",
-			"{",
-			"    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
-			"}",
+            "vec4 lit( float l ,float h, float m )",
+            "{",
+            "    return vec4( 1.0, max(l, 0.0), (l > 0.0) ? pow(max(0.0, h), m) : 0.0, 1.0 );",
+            "}",
 
-			"void main()",
-			"{",
-			"    vec3 normal = normalize( v_normal );",
-			"    vec3 surfaceToLight = normalize( v_surfaceToLight );",
-			"    vec3 surfaceToView = normalize( v_surfaceToView );",
-			"    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
-			"    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
-			"    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_color * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
-			"}"
-	
-		] .join("\n");
+            "void main()",
+            "{",
+            "    vec3 normal = normalize( v_normal );",
+            "    vec3 surfaceToLight = normalize( v_surfaceToLight );",
+            "    vec3 surfaceToView = normalize( v_surfaceToView );",
+            "    vec3 halfVector = normalize( surfaceToLight + surfaceToView );",
+            "    vec4 litR = lit( dot( normal, surfaceToLight ), dot( normal, halfVector ), shininess );",
+            "    gl_FragColor = vec4( ( vec4(1,1,1,1) * (v_color * litR.y + specular * litR.z * specularFactor) ).rgb, 1.0 );",
+            "}"
+    
+        ] .join("\n");
 
-		program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
-		program .use();
-		program .setUniform( 'orientations', data .orientations );
-		// material
-		program .setUniform( 'specular', new Float32Array([1,1,1,1]) );
-		program .setUniform( 'shininess', 50 );
-		program .setUniform( 'specularFactor', 0.2 );
+        program = tdl .programs .loadProgram( vertexShaderSrc, fragmentShaderSrc );
+        program .use();
+        program .setUniform( 'orientations', data .orientations );
+        // material
+        program .setUniform( 'specular', new Float32Array([1,1,1,1]) );
+        program .setUniform( 'shininess', 50 );
+        program .setUniform( 'specularFactor', 0.2 );
 
-		for ( jj = 0; jj < data .shapes .length; ++jj ) {
-			shape = data .shapes[ jj ];
-			positions = new tdl.primitives.AttribBuffer( 3, shape.position.length );
-			for ( ii = 0; ii < shape.position.length; ++ii) {
-				positions .push( shape.position[ ii ] );
-			}
-			normals = new tdl.primitives.AttribBuffer( 3, shape.normal.length );
-			for ( ii = 0; ii < shape.normal.length; ++ii) {
-				normals .push( shape.normal[ ii ] );
-			}
-			indices = new tdl.primitives.AttribBuffer( 3, shape.indices.length, 'Uint16Array' );
-			for ( ii = 0; ii < shape.indices.length; ++ii) {
-				indices .push( shape.indices[ ii ] );
-			}
-			newShapes .push( {
-				position :positions,
-				normal   :normals,
-				indices  :indices,
-				// Add extra fields to each geometry
-				worldPosition : new tdl.primitives.AttribBuffer( 3, shape.position.length ),
-				color         : new tdl.primitives.AttribBuffer( 4, shape.position.length ),
-				orientation   : new tdl.primitives.AttribBuffer( 2, shape.position.length )
-			});
-		}
+        for ( jj = 0; jj < data .shapes .length; ++jj ) {
+            shape = data .shapes[ jj ];
+            positions = new tdl.primitives.AttribBuffer( 3, shape.position.length );
+            for ( ii = 0; ii < shape.position.length; ++ii) {
+                positions .push( shape.position[ ii ] );
+            }
+            normals = new tdl.primitives.AttribBuffer( 3, shape.normal.length );
+            for ( ii = 0; ii < shape.normal.length; ++ii) {
+                normals .push( shape.normal[ ii ] );
+            }
+            indices = new tdl.primitives.AttribBuffer( 3, shape.indices.length, 'Uint16Array' );
+            for ( ii = 0; ii < shape.indices.length; ++ii) {
+                indices .push( shape.indices[ ii ] );
+            }
+            newShapes .push( {
+                position :positions,
+                normal   :normals,
+                indices  :indices,
+                // Add extra fields to each geometry
+                worldPosition : new tdl.primitives.AttribBuffer( 3, shape.position.length ),
+                color         : new tdl.primitives.AttribBuffer( 4, shape.position.length ),
+                orientation   : new tdl.primitives.AttribBuffer( 2, shape.position.length )
+            });
+        }
 
-		// convert data .instances to expanded geometry
-		for ( ii = 0; ii < data .instances .length; ++ii )
-			arrayInstances .push( newShapes[ data .instances[ ii ] .shape ] );
+        // convert data .instances to expanded geometry
+        for ( ii = 0; ii < data .instances .length; ++ii )
+            arrayInstances .push( newShapes[ data .instances[ ii ] .shape ] );
 
-		expanded = tdl.primitives.concatLarge( arrayInstances );
+        expanded = tdl.primitives.concatLarge( arrayInstances );
 
-		// The "expanded .arrays[ mm ] .*" AttribBuffers have now been concatenated, so we can
-		//  now fill in the instance data (color, position, and orientation).
-		for ( ii = 0; ii < data .instances .length; ++ii ) {
-			// copy in colors
-			mm = expanded .instances[ii] .arrayIndex; // a mesh index
-			jj = expanded .instances[ii] .firstVertex;
-			num = expanded .instances[ii] .numVertices;
-			attribBuffer = expanded .arrays[ mm ] .color;
-			attribBuffer .fillRange( jj, num, data .instances[ii] .color );
-			// copy in worldPosition
-			attribBuffer = expanded.arrays[ mm ] .worldPosition;
-			attribBuffer .fillRange( jj, num, data .instances[ ii ] .location );
-			// copy in orientation
-			attribBuffer = expanded.arrays[ mm ] .orientation;
-			attribBuffer .fillRange( jj, num, [ data .instances[ ii ] .orientation, 0 ]);
-		}
+        // The "expanded .arrays[ mm ] .*" AttribBuffers have now been concatenated, so we can
+        //  now fill in the instance data (color, position, and orientation).
+        for ( ii = 0; ii < data .instances .length; ++ii ) {
+            // copy in colors
+            mm = expanded .instances[ii] .arrayIndex; // a mesh index
+            jj = expanded .instances[ii] .firstVertex;
+            num = expanded .instances[ii] .numVertices;
+            attribBuffer = expanded .arrays[ mm ] .color;
+            attribBuffer .fillRange( jj, num, data .instances[ii] .color );
+            // copy in worldPosition
+            attribBuffer = expanded.arrays[ mm ] .worldPosition;
+            attribBuffer .fillRange( jj, num, data .instances[ ii ] .location );
+            // copy in orientation
+            attribBuffer = expanded.arrays[ mm ] .orientation;
+            attribBuffer .fillRange( jj, num, [ data .instances[ ii ] .orientation, 0 ]);
+        }
 
-		// Step 3: Make meshes from our expanded geometry.
-		meshes = [];
-		for ( mm = 0; mm < expanded.arrays.length; ++mm )
-			meshes .push( new tdl.models.Model( program, expanded .arrays[ mm ], null ) );
-	}
+        // Step 3: Make meshes from our expanded geometry.
+        meshes = [];
+        for ( mm = 0; mm < expanded.arrays.length; ++mm )
+            meshes .push( new tdl.models.Model( program, expanded .arrays[ mm ], null ) );
+    }
 
-	function render( gl, aspectRatio, stereoView, eye )
-	{
+    function render( gl, aspectRatio, stereoView, eye )
+    {
         var m4 = tdl .fast .matrix4;
         var viewInverse = new Float32Array(16);
         var eyePosition;
@@ -173,7 +173,7 @@ var makeScene = function( camera )
         var target = new Float32Array(3);
         var up = new Float32Array([0,1,0]);
         var lightWorldPos = new Float32Array(3);
-		var mm;
+        var mm;
 
         // clear the screen.
         gl.colorMask(true, true, true, true);
@@ -207,7 +207,7 @@ var makeScene = function( camera )
         tdl .fast .mulScalarVector( lightWorldPos, 10, eyePosition );
         program .setUniform( 'lightWorldPos', lightWorldPos );
     //     tdl .fast .rowMajor .mulMatrix4Vector( lightWorldPos, camera .viewRotationMatrix, lightWorldPos );
-		m4 .inverse( worldInverse, worldRotation );
+        m4 .inverse( worldInverse, worldRotation );
         m4 .inverse( viewInverse, view );
         program .setUniform( 'viewInverse', viewInverse );
         m4 .transpose( worldInverseTranspose, worldInverse );
@@ -223,9 +223,9 @@ var makeScene = function( camera )
         gl.clearColor( 0, 0, 0, 1 );
         gl.clear( gl.COLOR_BUFFER_BIT );
     }
-	
+    
     return {
-    	load   : load,
+        load   : load,
         render : render
     };
 }
@@ -233,7 +233,7 @@ var makeScene = function( camera )
 function initialize()
 {
     var currentModel, modelList, nextButton, prevButton, fileChooser;
-	var scene, camera, renderer, controller;
+    var scene, camera, renderer, controller;
     var then = (new Date()).getTime() * 0.001;
     var fpsTimer = new tdl .fps .FPSTimer();
     var fpsElem = document .getElementById( "fps" );
@@ -254,7 +254,7 @@ function initialize()
         fpsElem .innerHTML = fpsTimer.averageFPS;
         
         if ( rendererActive )
-	        renderer .render();
+            renderer .render();
     }
 
     function hasClass(ele,cls) {
@@ -277,41 +277,41 @@ function initialize()
     var downloadCurrentModel = function()
     {
         var dist;
-		var modelUrl = modelList[ currentModel ] .firstChild .nodeValue;
-		dist = modelList[ currentModel ] .getAttribute( "cameraDistance" );
-		if ( dist ) {
-			dist = parseInt( dist );
-		}
-		downloadModel( modelUrl, dist );
-	}
+        var modelUrl = modelList[ currentModel ] .firstChild .nodeValue;
+        dist = modelList[ currentModel ] .getAttribute( "cameraDistance" );
+        if ( dist ) {
+            dist = parseInt( dist );
+        }
+        downloadModel( modelUrl, dist );
+    }
 
     var downloadModel = function( modelUrl, dist )
     {
-		if ( modelUrl .indexOf( "http" ) === 0 )
-		{
-			modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
-		}
-		var request = new XMLHttpRequest();
-		request .open( "GET", modelUrl );
-		request .onreadystatechange = function () {
-			var parsed;
-			if ( request .readyState === 4 ) {
-				parsed = JSON.parse( request .responseText );
+        if ( modelUrl .indexOf( "http" ) === 0 )
+        {
+            modelUrl = "http://vzome.com/proxy/forward.py?tail=" + modelUrl;
+        }
+        var request = new XMLHttpRequest();
+        request .open( "GET", modelUrl );
+        request .onreadystatechange = function () {
+            var parsed;
+            if ( request .readyState === 4 ) {
+                parsed = JSON.parse( request .responseText );
 
-				rendererActive = false;
+                rendererActive = false;
 
-				scene .load( parsed );
-				
-				if ( dist )
-					camera .setDistance( dist );
-				else
-					camera .reset();
+                scene .load( parsed );
+                
+                if ( dist )
+                    camera .setDistance( dist );
+                else
+                    camera .reset();
 
-				rendererActive = true;
-			}
-		}
-		request .send();
-	}
+                rendererActive = true;
+            }
+        }
+        request .send();
+    }
 
     var nextModel = function() {
         if ( currentModel < modelList .length - 1 ) {
@@ -349,8 +349,8 @@ function initialize()
     
     var my3d = document .getElementById( "my3d" );
     
-	camera = threemaster .makeCamera();
-	scene = makeScene( camera );
+    camera = threemaster .makeCamera();
+    scene = makeScene( camera );
     renderer = threemaster .makeRenderer( canvas, scene, camera, my3d );
     controller = threemaster .makeController( canvas, camera );
     
@@ -358,7 +358,7 @@ function initialize()
 
     var args = document.location.search.substring(1).split('&');
     var argsParsed = {};
-	var i;
+    var i;
     for (i=0; i < args.length; i++)
     {
         arg = unescape(args[i]);
@@ -384,7 +384,7 @@ function initialize()
 
         if ( modelPath .indexOf( '.json', modelPath.length - 5 ) == -1 )
             modelPath = modelPath + '.json';
-		downloadModel( modelPath );
+        downloadModel( modelPath );
     }
     else
     {
