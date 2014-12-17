@@ -173,6 +173,7 @@ var makeScene = function( camera )
         var target = new Float32Array(3);
         var up = new Float32Array([0,1,0]);
         var lightWorldPos = new Float32Array(3);
+		var mm;
 
         // clear the screen.
         gl.colorMask(true, true, true, true);
@@ -293,6 +294,7 @@ function initialize()
 		var request = new XMLHttpRequest();
 		request .open( "GET", modelUrl );
 		request .onreadystatechange = function () {
+			var parsed;
 			if ( request .readyState === 4 ) {
 				parsed = JSON.parse( request .responseText );
 
@@ -356,6 +358,7 @@ function initialize()
 
     var args = document.location.search.substring(1).split('&');
     var argsParsed = {};
+	var i;
     for (i=0; i < args.length; i++)
     {
         arg = unescape(args[i]);

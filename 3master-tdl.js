@@ -14,6 +14,7 @@ threemaster.makeCamera = function () {
         {
             distance = 300;
             viewRotationMatrix = mat4 .create();
+			mat4 .identity( viewRotationMatrix );
         },
 
         zoom : function( delta )
