@@ -347,11 +347,9 @@ function initialize()
  
     canvas = document .getElementById( "modelView" );
     
-    var my3d = document .getElementById( "my3d" );
-    
     camera = threemaster .makeCamera();
     scene = makeScene( camera );
-    renderer = threemaster .makeRenderer( canvas, scene, camera, my3d );
+    renderer = threemaster .makeRenderer( canvas, scene, camera, has.mobile );
     controller = threemaster .makeController( canvas, camera );
     
     var modelPath = document .location .hash .substring(1);
