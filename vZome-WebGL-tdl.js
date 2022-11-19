@@ -379,6 +379,7 @@ function initialize()
     {
         if ( nextButton ) addClass( nextButton, "inactive" );
         if ( prevButton ) addClass( prevButton, "inactive" );
+        if ( openButton ) addClass( openButton, "inactive" );
 
         if ( modelPath .indexOf( '.json', modelPath.length - 5 ) == -1 )
             modelPath = modelPath + '.json';

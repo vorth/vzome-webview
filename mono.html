@@ -6,38 +6,21 @@
 <link rel="stylesheet" type="text/css" href="my3dNexus7.css">
 <script type="text/javascript" src="/webgl/tdl/base.js"></script>
 <script type="text/javascript" src="/webgl/glMatrix-0.9.5.min.js"></script>
-<script type="text/javascript" src="3master-tdl.js" ></script>
-<script type="text/javascript" src="has.js"></script>
 <script type="text/javascript" src="vZome-WebGL-tdl.js" ></script>
 
-<script type="text/javascript" src="//api.filepicker.io/v1/filepicker.js"></script>
-
-<script type="text/javascript">
-    const setCanvasSize = () =>
-    {
-        var viewContainer = document.getElementById("viewContainer");
-        var canvas = document.getElementById("modelView");
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
-    window.addEventListener( "load", setCanvasSize );
-    window.addEventListener( "resize", setCanvasSize );
-</script>
-
+<script type="text/javascript" src="https://www.dropbox.com/static/api/1/dropbox.js" id="dropboxjs" data-app-key="3wmjgusgudrzlpf"></script>
 
 </head>
 <body>
 
 <div id="viewContainer">
-    <canvas id="modelView" width="1300" height="900" />
+    <canvas id="modelView" width="900" height="1280" />
 </div>
 
 <div id="prevnexts">
     <button class="navButs inactive" id="prev">Prev</button>
     <button class="navButs" id="next">Next</button>
-	<button class="fileOpen" id="open">Open</button>
 </div>
-
 
 <div>
     <ul id="models">
@@ -53,11 +36,9 @@
 <div id="fpsContainer">
   <div class="fps">fps: <span id="fps">29</span></div>
 </div>
-<!--
 <form>
 	<input type="dropbox-chooser" name="json-file" id="file-chooser" data-link-type="direct" style="visibility: hidden;" />
 </form>
--->
 
 </body>
 </html>
